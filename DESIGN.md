@@ -44,28 +44,7 @@
 
 ## 2. 아키텍처
 
-```
-┌──────────────────────────── 브라우저 (localhost:7777) ────────────────────────────┐
-│  React SPA  (web/)                                                                 │
-│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌──────────────┐               │
-│  │ Range (P1)   │ │ 차트 뷰어(P2)│ │ 트레이너(P3) │ │ 포스트플랍(P5)│              │
-│  └──────┬───────┘ └──────┬───────┘ └──────┬───────┘ └──────┬───────┘               │
-│         └──────── 공용: RangeGrid(Canvas) / ComboPanel / StrategyBar / EVPanel ────┘│
-└──────────────────────────────────│ HTTP JSON (+SSE P4) │────────────────────────────┘
-                                   ▼
-┌──────────────────────── @ggto/server (Hono, 단일 Node 프로세스) ───────────────────┐
-│  routes/range (P1)   routes/charts (P2)   routes/trainer (P3)   routes/solve (P4)   │
-│         │                   │                    │                    │             │
-│   @ggto/core          @ggto/preflop         @ggto/trainer        @ggto/solver       │
-│   (순수 도메인)        (스키마·저장소·        (출제·채점·SRS)      (Solver 인터페이스, │
-│                        ggto-json·도달 레인지)                       잡큐, 캐시)      │
-│                              │                                        │ stdio RPC   │
-│                       data/ggto.db (node:sqlite)          ┌───────────▼───────────┐ │
-│                       data/charts/*.json                  │ ggto-solver-cli (Rust)│ │
-│                       data/solves/*.bin (zstd)            │ postflop-solver, AGPL │ │
-└───────────────────────────────────────────────────────────│ 별도 프로세스·별도 빌드│─┘
-                                                            └───────────────────────┘
-```
+![GGTO 아키텍처](docs/assets/architecture.svg)
 
 ### 워크스페이스 구조
 ```
@@ -174,20 +153,8 @@ CREATE INDEX idx_pf_lookup ON pf_node(chart_set_id, action_seq);
 - 임포터는 `tools/chart-import`에 포맷별 어댑터로: `--format piosolver-csv | gtoplus-json | ggto-json`
 
 ### 4.3 UI
-```
-┌──────────────────────────────────────────────────────────┐
-│ [6max 100bb ▾]  UTG  HJ  CO  BTN  SB  BB    ← 포지션 탭   │
-│ 액션: [Open 2.5] → [Fold] [Call] [3bet 11] ← 브레드크럼   │
-├───────────────────────────┬──────────────────────────────┤
-│  A K Q J T 9 8 7 6 5 4 3 2│  선택 콤보: AJs               │
-│ A■■■■▨▨░░░░░░ │  ─────────────────────────    │
-│ K■■■▨▨░░ ...              │  Raise 11    62%   +3.41bb   │
-│ Q■■▨▨░ ...                │  Call        31%   +1.02bb   │
-│ ... (169 격자, 액션색 누적)│  Fold         7%    0.00bb   │
-│                           │  ─────────────────────────    │
-│ [빈도] [EV] [콤보뷰]       │  콤보별 분해 (스페이드 블로커) │
-└───────────────────────────┴──────────────────────────────┘
-```
+![프리플랍 차트 뷰어](docs/assets/chart-viewer-ui.svg)
+
 - 셀 색: 액션별 색을 빈도 비율로 세로 스택 (GTO Wizard 방식)
 - 호버 → 툴팁에 콤보 개수/빈도/EV
 - 셀 클릭 → 우측 패널에 콤보 4~12개 분해 표시
@@ -197,18 +164,7 @@ CREATE INDEX idx_pf_lookup ON pf_node(chart_set_id, action_seq);
 ## 5. 포스트플랍 (하이브리드의 "솔브" 쪽)
 
 ### 5.1 솔브 잡 파이프라인
-```
-POST /api/solve  {ranges, board, pot, stacks, bet_sizings, accuracy}
-        │
-        ├─ 1. 보드 동형 정규화 → canonical config
-        ├─ 2. config_hash = blake3(canonical config)
-        ├─ 3. 캐시 히트? → 즉시 job_id + status:done 반환
-        └─ 4. 미스 → 큐 등록 (tokio 세마포어, 동시 2개)
-                │
-                └─ postflop-solver: build_tree → allocate → solve_step 루프
-                        │ 매 N 이터레이션마다 exploitability 계산 → SSE push
-                        └─ 목표 exploitability 도달 or max_iter → 직렬화 → data/solves/{hash}.bin
-```
+![솔브 잡 파이프라인](docs/assets/solve-pipeline.svg)
 
 ### 5.2 리소스 관리 (여기가 실패 지점 1번)
 | 항목 | 설계 |
@@ -237,20 +193,8 @@ GET /api/solve/{hash}/node?line=b33.c/b75
 프론트는 이걸 받아서 격자를 그린다. 노드 이동 시마다 요청 + TanStack Query 캐시.
 
 ### 5.4 UI
-```
-┌──────────────────────────────────────────────────────────────────┐
-│ OOP: BB vs BTN 3bet-call    Board: [K♠][7♥][2♥]   Pot 21.5  Eff 89│
-├────────────────┬─────────────────────────────────────────────────┤
-│  액션 트리      │  ┌─ OOP 전략 (169 격자) ──┐  ┌─ 어그리게이트 ─┐│
-│  ▾ Flop        │  │                        │  │ Check   58%    ││
-│    ▸ Check     │  │   ■■▨░  누적 색상       │  │ Bet 33  31%    ││
-│    ▾ Bet 33 ●  │  │                        │  │ Bet 75  11%    ││
-│      ▸ Fold    │  └────────────────────────┘  │ EV: +12.8bb    ││
-│      ▾ Call ●  │  ┌─ 런아웃 히트맵 (턴) ────┐  └────────────────┘│
-│        ▾ Turn  │  │ 카드별 OOP EV 변화       │                   │
-│          ...   │  │ A♠ +2.1  A♥ -0.4 ...    │  [범위 편집] [저장]│
-└────────────────┴──┴────────────────────────┴───────────────────┘
-```
+![포스트플랍 탐색기](docs/assets/postflop-explorer-ui.svg)
+
 - 좌: 액션 트리 (브레드크럼 + 클릭 이동)
 - 중앙: 169 격자 (OOP/IP 토글)
 - 우: 어그리게이트 빈도 + EV

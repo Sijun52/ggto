@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 470" width="860" height="470" font-family="ui-sans-serif, -apple-system, 'Segoe UI', 'Malgun Gothic', 'Apple SD Gothic Neo', 'Noto Sans KR', Roboto, Arial, sans-serif">
+  <defs>
+    <marker id="s1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#475569"/></marker>
+    <marker id="s2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#059669"/></marker>
+    <style>
+      .ttl{font-size:13px;fill:#0f172a;font-weight:600}.lbl{font-size:12px;fill:#0f172a}
+      .sm{font-size:11.5px;fill:#475569}.xs{font-size:10.5px;fill:#64748b}
+      .cap{font-size:10.5px;fill:#94a3b8}
+      .mono{font-family:ui-monospace,'Cascadia Mono',Consolas,monospace}
+      .num{font-size:11px;fill:#ffffff;font-weight:600}
+    </style>
+  </defs>
+  <rect width="860" height="470" fill="#f8fafc"/>
+  <text class="ttl" x="20" y="30">P4 솔브 잡 파이프라인</text>
+  <text class="cap" x="180" y="30">정본은 docs/specs/P4.md · 캐시가 1급 시민이다</text>
+
+  <rect x="20" y="46" width="360" height="40" rx="7" fill="#ffffff" stroke="#cbd5e1"/>
+  <text class="sm mono" x="34" y="63">POST /api/solve</text>
+  <text class="xs mono" x="34" y="79">{ranges, board, pot, stacks, bet_sizings, accuracy}</text>
+  <line x1="80" y1="86" x2="80" y2="108" stroke="#475569" stroke-width="1.4" marker-end="url(#s1)"/>
+
+  <g>
+    <circle cx="44" cy="128" r="11" fill="#475569"/><text class="num" x="44" y="132" text-anchor="middle">1</text>
+    <text class="lbl" x="66" y="126">보드 동형 정규화 → canonical config</text>
+    <text class="xs" x="66" y="142">레인지에도 같은 슈트 순열을 적용한다 · 플랍 22,100 → 1,755 동치류</text>
+    <line x1="44" y1="150" x2="44" y2="168" stroke="#cbd5e1" stroke-width="1.2"/>
+
+    <circle cx="44" cy="186" r="11" fill="#475569"/><text class="num" x="44" y="190" text-anchor="middle">2</text>
+    <text class="lbl mono" x="66" y="184">config_hash = blake3(canonical config)</text>
+    <text class="xs" x="66" y="200">accuracy 는 해시에서 제외 — "≥" 로 비교해 더 정확한 캐시를 재사용</text>
+    <line x1="44" y1="208" x2="44" y2="226" stroke="#cbd5e1" stroke-width="1.2"/>
+
+    <circle cx="44" cy="244" r="11" fill="#059669"/><text class="num" x="44" y="248" text-anchor="middle">3</text>
+    <text class="lbl" x="66" y="242">캐시 히트?</text>
+    <text class="xs" x="66" y="258">즉시 job_id + status:done</text>
+  </g>
+
+  <path d="M150 244 L470 244" fill="none" stroke="#059669" stroke-width="1.5" marker-end="url(#s2)"/>
+  <text class="xs" x="250" y="238" fill="#047857">HIT — 연산 없음</text>
+
+  <line x1="44" y1="266" x2="44" y2="290" stroke="#475569" stroke-width="1.4" marker-end="url(#s1)"/>
+  <text class="xs" x="58" y="284" fill="#b91c1c">MISS</text>
+
+  <rect x="20" y="298" width="430" height="150" rx="8" fill="#ffffff" stroke="#cbd5e1"/>
+  <circle cx="44" cy="326" r="11" fill="#475569"/><text class="num" x="44" y="330" text-anchor="middle">4</text>
+  <text class="lbl" x="66" y="324">잡 큐 등록 · 동시 실행 2개</text>
+  <text class="xs" x="66" y="340">세마포어만으론 OOM 을 못 막는다 → 예상 메모리 합 ≤ 8GB 게이트</text>
+
+  <rect x="40" y="352" width="392" height="80" rx="7" fill="#fef2f2" stroke="#fecaca"/>
+  <text class="sm mono" x="54" y="371" fill="#991b1b">ggto-solver-cli</text>
+  <text class="xs" x="146" y="371">Rust · 별도 프로세스 · AGPL 경계</text>
+  <text class="xs mono" x="54" y="391">build_tree → allocate → solve_step 루프</text>
+  <text class="xs" x="54" y="409">매 N 이터레이션마다 exploitability 계산 → SSE push</text>
+  <text class="xs" x="54" y="425">목표 도달 또는 max_iter → 직렬화 → data/solves/{hash}.bin</text>
+
+  <!-- right column: guards -->
+  <rect x="470" y="46" width="370" height="184" rx="8" fill="#fffbeb" stroke="#fde68a"/>
+  <text class="ttl" x="486" y="68">실패 지점 1번 — 리소스</text>
+  <text class="xs" x="486" y="90">· 플랍부터 풀트리는 수 GB. 베팅 사이즈 프리셋을 2~3개로 제한</text>
+  <text class="xs" x="486" y="110">· 트리 빌드 후 필요 메모리를 계산해 <tspan class="mono">솔브 전에</tspan> 사용자에게 보여주고</text>
+  <text class="xs" x="500" y="126">확인받는다 — "예상 2.1GB / 약 40초"</text>
+  <text class="xs" x="486" y="146">· 캐시 축출 LRU, data/solves 총량 상한 기본 20GB</text>
+  <text class="xs" x="486" y="166">· 취소는 solve_step 루프에서 확인</text>
+  <text class="xs" x="486" y="186">· EV 는 f32 로 전송. f16 은 ULP 0.0625bb 라 채점 임계(0.05bb)와</text>
+  <text class="xs" x="500" y="202">같은 크기가 되어 쓸 수 없다</text>
+  <text class="xs" x="486" y="220" fill="#a16207">postflop-solver 의 "압축 모드" 는 내부 고정소수점이지 IEEE f16 이 아니다</text>
+
+  <rect x="470" y="242" width="370" height="206" rx="8" fill="#ffffff" stroke="#cbd5e1"/>
+  <text class="ttl" x="486" y="264">결과는 통째로 보내지 않는다</text>
+  <text class="xs" x="486" y="286">솔브 결과는 GB 단위다. 노드 단위 lazy 조회가 필수 —</text>
+  <text class="xs" x="486" y="302">GB 는 Rust 데몬 메모리에 상주하고, Node 는 노드 하나씩만 받는다.</text>
+  <rect x="486" y="316" width="338" height="76" rx="6" fill="#f8fafc" stroke="#e2e8f0"/>
+  <text class="xs mono" x="498" y="336" fill="#334155">GET /api/solve/{hash}/node?line=b33.c/b75</text>
+  <text class="xs mono" x="498" y="354" fill="#64748b">→ actions, strategy f32[3][1326], ev f32[3][1326],</text>
+  <text class="xs mono" x="498" y="370" fill="#64748b">   ranges, equity, aggregate (169 격자용 사전 집계)</text>
+  <text class="xs mono" x="498" y="386" fill="#64748b">   octet-stream · 노드당 수십 KB</text>
+  <text class="xs" x="486" y="414">프론트는 TanStack Query 로 노드별 캐시. 트리 이동마다 1요청.</text>
+  <text class="cap" x="486" y="436">이 경계가 곧 Solver 인터페이스 경계이자 AGPL 경계다</text>
+
+  <text class="cap" x="20" y="464" fill="#cbd5e1">GGTO · docs/assets/solve-pipeline.svg</text>
+</svg>
