@@ -27,7 +27,7 @@ export function GradeVerdict(props: { grade: GradeDto }): React.JSX.Element {
         {grade.evLossBb === null ? '빈도 채점 (EV 없음)' : `EV loss ${grade.evLossBb.toFixed(2)}bb`}
       </span>
       {grade.mixed ? (
-        <span className={`rounded px-2 py-0.5 text-xs ${BADGE_NEUTRAL}`} data-testid="grade-mixed">
+        <span className={`rounded px-2 py-0.5 text-sm md:text-xs ${BADGE_NEUTRAL}`} data-testid="grade-mixed">
           혼합 스팟
         </span>
       ) : null}

@@ -243,7 +243,7 @@ export function TrainerPage(): React.JSX.Element {
               {`${spot.heroPos} · ${spot.seq === '' ? 'root' : spot.seq} · 팟 ${spot.potBb.toFixed(2)}bb · ${CATEGORY_LABEL[spot.category]}`}
             </span>
             {spot.gradedBy === 'frequency' ? (
-              <span className={`shrink-0 rounded px-2 py-0.5 text-xs ${BADGE_WARN}`} data-testid="frequency-badge">
+              <span className={`shrink-0 rounded px-2 py-0.5 text-sm md:text-xs ${BADGE_WARN}`} data-testid="frequency-badge">
                 빈도 채점
               </span>
             ) : null}

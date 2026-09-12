@@ -69,13 +69,21 @@ export async function launchChrome() {
     });
   });
 
-  const close = () => {
+  const close = async () => {
     proc.kill();
-    try {
-      rmSync(profile, { recursive: true, force: true });
-    } catch (err) {
-      // 프로필 삭제 실패는 검사 결과와 무관하다. 삼키지 않고 알린다.
-      console.warn(`[shots] 임시 프로필 삭제 실패: ${String(err)}`);
+    // Windows 는 kill 직후에도 잠시 파일 핸들을 쥐고 있다 (EPERM). 몇 번 다시 시도한다.
+    for (let i = 0; ; i++) {
+      try {
+        rmSync(profile, { recursive: true, force: true });
+        return;
+      } catch (err) {
+        if (i >= 10) {
+          // 검사 결과와 무관하지만 삼키지 않고 알린다.
+          console.warn(`[shots] 임시 프로필 삭제 실패 (무해): ${String(err)}`);
+          return;
+        }
+        await new Promise((r) => setTimeout(r, 200));
+      }
     }
   };
 

@@ -122,7 +122,7 @@ async function main() {
     }
   } finally {
     cdp.close();
-    chrome.close();
+    await chrome.close();
     server.stop();
   }
 

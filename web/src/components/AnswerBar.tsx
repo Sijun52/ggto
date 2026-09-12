@@ -76,7 +76,7 @@ export function AnswerBar(props: AnswerBarProps): React.JSX.Element {
 
       {grade === null ? (
         props.hint === undefined ? null : (
-          <p className={`text-xs ${TEXT_DIM}`} data-testid="answer-hint">
+          <p className={`text-sm md:text-xs ${TEXT_DIM}`} data-testid="answer-hint">
             {props.hint}
           </p>
         )

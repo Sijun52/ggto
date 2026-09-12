@@ -181,7 +181,7 @@ async function main() {
     await screenshot(cdp, resolve(OUT_DIR, 'P3M-mobile-report-30d.png'));
   } finally {
     cdp.close();
-    chrome.close();
+    await chrome.close();
     server.stop();
   }
 

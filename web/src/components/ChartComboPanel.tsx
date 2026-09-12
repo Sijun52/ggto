@@ -64,7 +64,7 @@ export function ChartComboPanel(props: ChartComboPanelProps): React.JSX.Element 
       </table>
 
       {resolution === '169' ? (
-        <p className={`mb-2 text-xs ${TEXT_WARN}`} data-testid="chart-resolution-note">
+        <p className={`mb-2 text-sm md:text-xs ${TEXT_WARN}`} data-testid="chart-resolution-note">
           169 해상도 차트 — 콤보별 값은 모두 동일합니다.
         </p>
       ) : null}

@@ -132,7 +132,7 @@ export function ChartNodeView(props: ChartNodeViewProps): React.JSX.Element {
     <div className="flex min-w-0 flex-col gap-3">
       <div ref={gridRef} className="min-w-0">
         {masked ? null : (
-          <div className={`mb-2 flex flex-wrap items-center gap-3 text-xs ${TEXT_BODY}`} data-testid="legend">
+          <div className={`mb-2 flex flex-wrap items-center gap-3 text-sm md:text-xs ${TEXT_BODY}`} data-testid="legend">
             {viewMode === 'strategy' ? (
               (node?.actions ?? []).map((a) => (
                 <span key={a} className="flex items-center gap-1">
@@ -164,7 +164,7 @@ export function ChartNodeView(props: ChartNodeViewProps): React.JSX.Element {
         )}
 
         {compactLabels && cells !== null ? (
-          <p className={`mt-1 text-[11px] ${TEXT_DIM}`} data-testid="grid-compact-legend">
+          <p className={`mt-1 text-xs md:text-[11px] ${TEXT_DIM}`} data-testid="grid-compact-legend">
             셀 라벨은 랭크 두 글자 — 대각선 위 = 수티드 · 아래 = 오프수트
           </p>
         ) : null}

@@ -83,7 +83,7 @@ export function ReportPanel(props: { report: ReportDto; title: string }): React.
   return (
     <div data-testid="report-panel" className={`min-w-0 text-sm ${TEXT_BODY}`}>
       <h2 className={`mb-1 font-semibold ${TEXT_STRONG}`}>{props.title}</h2>
-      <p className={`mb-2 text-xs ${TEXT_DIM}`}>
+      <p className={`mb-2 text-sm md:text-xs ${TEXT_DIM}`}>
         bb/100 = 이 스팟 100개를 실전에서 이렇게 플레이했을 때의 손실(bb). EV 평균의 분모는 ev 채점 횟수입니다.
       </p>
 
@@ -115,9 +115,9 @@ export function ReportPanel(props: { report: ReportDto; title: string }): React.
       )}
 
       <div className="mt-3" data-testid="report-leaks">
-        <h3 className={`mb-1 text-xs font-semibold ${TEXT_BODY}`}>리크</h3>
+        <h3 className={`mb-1 text-sm font-semibold md:text-xs ${TEXT_BODY}`}>리크</h3>
         {report.leaks.length === 0 ? (
-          <p className={`text-xs ${TEXT_DIM}`}>
+          <p className={`text-sm md:text-xs ${TEXT_DIM}`}>
             아직 리크가 없습니다 (ev 채점 20회 이상 + 평균 0.10bb 이상인 카테고리만 표시).
           </p>
         ) : (
