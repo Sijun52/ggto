@@ -98,8 +98,13 @@ export const PAGE = 'bg-[#020617] text-[#e2e8f0]';
 export const BORDER = 'border-[#334155]';
 
 /**
- * `< md` 터치 타겟 최소 44×44 (P3M 4절). 데스크톱에서는 해제해 촘촘한 배치를 지킨다.
+ * 터치 타겟 최소 44×44 (P3M 4절).
+ *
+ * `md:` 로 해제하되 **손가락 장치에서는 폭과 무관하게 유지**한다: `md` 는 정확히 768px
+ * 이고 세로 태블릿이 딱 그 폭이라, 폭만 보면 손가락으로 20px 버튼을 누르게 된다
+ * (768x1024 `pointer: coarse` 실측에서 10개가 20px 로 줄었다).
  */
-export const TOUCH = 'min-h-11 min-w-11 md:min-h-0 md:min-w-0';
+export const TOUCH =
+  'min-h-11 min-w-11 md:min-h-0 md:min-w-0 pointer-coarse:min-h-11 pointer-coarse:min-w-11';
 /** 하단 바의 큰 버튼: 48px */
 export const TOUCH_LG = 'min-h-12';

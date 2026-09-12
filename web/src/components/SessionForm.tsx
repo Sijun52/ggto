@@ -40,7 +40,7 @@ function ToggleRow(props: {
         data-testid={props.testId}
         checked={props.checked}
         onChange={props.onToggle}
-        className="h-11 w-11 shrink-0 appearance-none rounded-lg bg-[#334155] bg-clip-content p-3 checked:bg-[#34d399] md:h-6 md:w-6 md:p-1"
+        className="h-11 w-11 shrink-0 appearance-none rounded-lg bg-[#334155] bg-clip-content p-3 checked:bg-[#34d399] md:h-6 md:w-6 md:p-1 pointer-coarse:h-11 pointer-coarse:w-11 pointer-coarse:p-3"
       />
       <span className="min-w-0 flex-1 truncate">{props.label}</span>
       <span aria-hidden className="shrink-0">

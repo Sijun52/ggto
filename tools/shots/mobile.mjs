@@ -179,6 +179,51 @@ async function main() {
     await waitFor(cdp, `document.querySelector('[data-testid="report-panel"]')`, { label: '30d 리포트' });
     await commonChecks(cdp, 'report-30d');
     await screenshot(cdp, resolve(OUT_DIR, 'P3M-mobile-report-30d.png'));
+
+    // --- 8. 태블릿 768x1024 (여전히 터치다) -------------------------------
+    // md 브레이크포인트가 정확히 768 이라 여기서 `md:min-h-0` 이 켜진다. 손가락은
+    // 그대로이므로 44px 은 유지돼야 한다 (index.css 의 pointer: coarse 규칙).
+    await emulate(cdp, { width: 768, height: 1024, dpr: 2, mobile: true });
+    for (const [name, url] of [
+      ['tablet-range', '/'],
+      ['tablet-charts', `/charts?set=${String(setId)}`],
+    ]) {
+      await goto(cdp, server.baseUrl + url);
+      await waitFor(cdp, `document.querySelector('canvas[role="grid"]')`, { label: `${name} 격자` });
+      const vp = await evaluate(cdp, P.VIEWPORT);
+      check(vp.innerWidth === 768 && vp.scrollWidth === 768, `${name}: 768 안에 들어간다`, vp);
+      check((await evaluate(cdp, P.OVERFLOWING)).length === 0, `${name}: 뷰포트를 넘는 요소 0`);
+      const small = await evaluate(cdp, P.SMALL_TARGETS);
+      check(small.length === 0, `${name}: 44x44 미만 터치 타겟 0 (pointer: coarse)`, small);
+      const canvas = await evaluate(cdp, P.CANVAS);
+      check(
+        canvas !== null && canvas.cssWidth % 13 === 0 && canvas.cssWidth <= 420,
+        `${name}: 격자가 13의 배수이고 420 이하 (우측 열을 남긴다)`,
+        canvas,
+      );
+    }
+    await startSession(cdp, server.baseUrl, 20);
+    check(
+      (await evaluate(cdp, P.SMALL_TARGETS)).length === 0,
+      'tablet-trainer: 44x44 미만 터치 타겟 0',
+      await evaluate(cdp, P.SMALL_TARGETS),
+    );
+    await screenshot(cdp, resolve(OUT_DIR, 'P3M-tablet-trainer-masked.png'));
+    await answerFirst(cdp);
+    await evaluate(cdp, 'window.scrollTo(0, 0)');
+    const tVerdict = await evaluate(cdp, P.rectOf('grade-verdict'));
+    const tNext = await evaluate(cdp, P.rectOf('next-spot'));
+    check(
+      tVerdict !== null && tVerdict.top >= 0 && tVerdict.bottom <= 1024,
+      'tablet 답 후: verdict 가 스크롤 0 에서 보인다',
+      tVerdict,
+    );
+    check(
+      tNext !== null && tNext.top >= 0 && tNext.bottom <= 1024,
+      'tablet 답 후: "다음" 이 스크롤 0 에서 보인다',
+      tNext,
+    );
+    await screenshot(cdp, resolve(OUT_DIR, 'P3M-tablet-trainer-revealed.png'));
   } finally {
     cdp.close();
     await chrome.close();
