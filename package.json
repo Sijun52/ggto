@@ -1,0 +1,33 @@
+{
+  "name": "ggto",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "web",
+    "tools/*"
+  ],
+  "scripts": {
+    "build:libs": "npm run build -w @ggto/core -w @ggto/protocol -w @ggto/preflop -w @ggto/trainer",
+    "build:tools": "npm run build -w @ggto/chart-gen -w @ggto/chart-import",
+    "typecheck": "npm run build:libs && npm run typecheck --workspaces --if-present",
+    "prepare": "npm run build:libs",
+    "pretest": "npm run build:libs && npm run build:tools",
+    "test": "npm run test --workspaces --if-present",
+    "test:slow": "npm run test:slow --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present",
+    "bench": "npm run bench --workspaces --if-present",
+    "bench:strict": "npm run bench --workspaces --if-present -- --strict",
+    "start": "node packages/server/dist/main.js",
+    "smoke": "node packages/server/scripts/smoke.mjs",
+    "preseed": "npm run build:libs && npm run build:tools",
+    "seed": "node tools/chart-gen/dist/main.js --out data/charts && node tools/chart-import/dist/main.js --db data/ggto.db data/charts",
+    "import": "node tools/chart-import/dist/main.js",
+    "gen:equity": "npm run build:libs && npm run gen:equity -w @ggto/chart-gen",
+    "predev:server": "npm run build:libs",
+    "dev:server": "npm run dev -w @ggto/server",
+    "predev:web": "npm run build:libs",
+    "dev:web": "npm run dev -w @ggto/web",
+    "ci": "npm run typecheck && npm run test && npm run build && npm run bench && npm run smoke"
+  }
+}

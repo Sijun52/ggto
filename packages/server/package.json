@@ -1,0 +1,27 @@
+{
+  "name": "@ggto/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/main.js",
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsx watch src/main.ts"
+  },
+  "dependencies": {
+    "@ggto/core": "*",
+    "@ggto/protocol": "*",
+    "@hono/node-server": "^2.1.1",
+    "hono": "^4.13.7",
+    "@ggto/preflop": "*",
+    "@ggto/trainer": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.9.2",
+    "tsx": "^4.23.13",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.0"
+  }
+}
