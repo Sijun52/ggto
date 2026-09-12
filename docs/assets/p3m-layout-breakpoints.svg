@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 400" width="960" height="400" font-family="ui-sans-serif, -apple-system, 'Segoe UI', 'Malgun Gothic', 'Apple SD Gothic Neo', 'Noto Sans KR', Roboto, Arial, sans-serif">
+  <style>
+    .h { font-size: 14px; font-weight: 700; fill: #0f172a; }
+    .t { font-size: 12px; fill: #0f172a; }
+    .s { font-size: 10.5px; fill: #475569; }
+    .box { fill: #f1f5f9; stroke: #334155; stroke-width: 1.2; }
+    .grid { fill: #cbd5e1; stroke: #334155; stroke-width: 1; }
+    .panel { fill: #e0f2fe; stroke: #0369a1; stroke-width: 1; }
+    .bar { fill: #bae6fd; stroke: #0369a1; stroke-width: 1.2; }
+  </style>
+  <text x="20" y="24" class="h">P3M 브레이크포인트 — 하나의 컴포넌트 트리, 세 가지 배치 (Tailwind md=768 · xl=1280)</text>
+
+  <!-- mobile -->
+  <text x="40" y="56" class="t">&lt; 768px (휴대폰)</text>
+  <rect x="40" y="64" width="150" height="300" rx="8" class="box"/>
+  <rect x="48" y="72" width="134" height="22" class="grid"/><text x="54" y="87" class="s">헤더 1줄 (44 높이)</text>
+  <rect x="48" y="100" width="134" height="26" class="grid"/><text x="54" y="116" class="s">스팟 · 히어로 카드</text>
+  <rect x="48" y="132" width="134" height="134" class="grid"/><text x="54" y="204" class="s">격자 (뷰포트 폭에 맞춤)</text>
+  <rect x="48" y="272" width="134" height="34" class="panel"/><text x="54" y="292" class="s">액션표 / 접힌 콤보 패널</text>
+  <rect x="48" y="316" width="134" height="40" class="bar"/><text x="54" y="340" class="s">고정 액션 바 (sticky)</text>
+  <text x="40" y="384" class="s">세로 스택 · 하단 바 · 탭 선택</text>
+
+  <!-- tablet / narrow desktop -->
+  <text x="260" y="56" class="t">768 – 1279px (태블릿 · 작은 노트북)</text>
+  <rect x="260" y="64" width="300" height="300" rx="8" class="box"/>
+  <rect x="268" y="72" width="284" height="22" class="grid"/><text x="274" y="87" class="s">헤더</text>
+  <rect x="268" y="100" width="284" height="26" class="grid"/><text x="274" y="116" class="s">스팟 · 히어로 카드</text>
+  <rect x="268" y="132" width="180" height="180" class="grid"/><text x="274" y="226" class="s">격자 ≤ 420px</text>
+  <rect x="456" y="132" width="96" height="180" class="panel"/><text x="462" y="150" class="s">답 버튼</text><text x="462" y="166" class="s">채점 박스</text><text x="462" y="182" class="s">액션표</text><text x="462" y="200" class="s">▸ 콤보 (접힘)</text>
+  <rect x="268" y="320" width="284" height="34" class="grid"/><text x="274" y="340" class="s">펼친 콤보 패널 (아래로)</text>
+  <text x="260" y="384" class="s">2열: 격자 + 우측 열(≥ 280px). 바는 우측 열 상단에 고정</text>
+
+  <!-- desktop -->
+  <text x="620" y="56" class="t">≥ 1280px (데스크톱 — 지금 레이아웃 유지)</text>
+  <rect x="620" y="64" width="320" height="300" rx="8" class="box"/>
+  <rect x="628" y="72" width="304" height="22" class="grid"/><text x="634" y="87" class="s">헤더</text>
+  <rect x="628" y="100" width="304" height="26" class="grid"/><text x="634" y="116" class="s">스팟 · 히어로 카드</text>
+  <rect x="628" y="132" width="196" height="196" class="grid"/><text x="634" y="234" class="s">격자 520px (변경 없음)</text>
+  <rect x="832" y="132" width="100" height="196" class="panel"/><text x="838" y="150" class="s">답 버튼</text><text x="838" y="166" class="s">채점 박스</text><text x="838" y="182" class="s">액션표</text><text x="838" y="200" class="s">▸ 콤보 (접힘)</text>
+  <text x="620" y="384" class="s">회귀 게이트: 답 후 verdict 가 스크롤 없이 보인다 (1280×720 에서 지금은 아님)</text>
+</svg>

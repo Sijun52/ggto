@@ -83,12 +83,27 @@ export interface OpenTrainerOptions {
   now?: () => number;
 }
 
-/** 세션 seed 와 문항 번호를 섞어 draw 별 rng 를 만든다 (FNV-1a 계열 혼합). */
+/**
+ * splitmix32 의 finalizer 한 스텝. 비선형(곱셈 + xorshift)이라 입력의 1비트 차이가
+ * 출력 전체로 번진다.
+ */
+function mix32(x: number): number {
+  let t = x | 0;
+  t = Math.imul(t ^ (t >>> 16), 0x21f0aaad);
+  t = Math.imul(t ^ (t >>> 15), 0x735a2d97);
+  return (t ^ (t >>> 15)) >>> 0;
+}
+
+/**
+ * 세션 seed 와 문항 번호를 섞어 draw 별 rng 시드를 만든다 (P3.md 5.3 R2).
+ *
+ * **seed 를 먼저 비선형으로 섞은 뒤** index 를 더하고 다시 섞는다. R1 의 `(seed ^ C) ^ index`
+ * 는 XOR 선형이라 `drawSeed(s, i) = drawSeed(s ^ i, 0)` 이 성립했고, 그래서 인접 시드 세션이
+ * 같은 스팟 집합을 뽑았다 (시드 5000/5001 의 50문항 집합 교집합 46). 덧셈은 XOR 과 다른
+ * 군이라 이 항등식이 깨진다 (P3 R1 MAJOR 2).
+ */
 function drawSeed(seed: number, index: number): number {
-  let h = (seed ^ 0x9e3779b9) >>> 0;
-  h = Math.imul(h ^ index, 0x85ebca6b) >>> 0;
-  h = (h ^ (h >>> 13)) >>> 0;
-  return Math.imul(h, 0xc2b2ae35) >>> 0;
+  return mix32((mix32(seed) + Math.imul(index + 1, 0x9e3779b9)) | 0);
 }
 
 export class TrainerService {
@@ -194,7 +209,7 @@ export class TrainerService {
     });
 
     const now = this.#now();
-    const srs = applyReview(this.#store.getSrs(req.spotKey), g.verdict, now);
+    const srs = applyReview(this.#store.getSrs(req.spotKey, now), g.verdict, now);
     const msTaken = Math.min(MAX_MS_TAKEN, Math.max(0, Math.round(req.msTaken)));
     const ok = this.#store.recordAnswer(
       {

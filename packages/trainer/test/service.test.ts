@@ -109,6 +109,25 @@ describe('P3 7 세션 수명', () => {
     }
   });
 
+  it('P3 5.3 인접 시드 세션은 같은 스팟 집합을 뽑지 않는다 (집합 교집합 ≤ 5)', () => {
+    // R1 의 `(seed ^ C) ^ index` 는 XOR 선형이라 drawSeed(s, i) = drawSeed(s ^ i, 0) 이었고,
+    // 시드 5000/5001 의 50문항 **집합** 교집합이 46 이었다 (순서만 달라 기존 열 비교는 통과).
+    // 두 harness 는 DB 상태가 같은 빈 저장소라 차이의 원인은 시드뿐이다.
+    for (const seed of [1, 2, 5000]) {
+      const a = harness();
+      const b = harness();
+      try {
+        const ka = new Set(playSession(a, 50, seed, (x) => x[0] as string));
+        const kb = new Set(playSession(b, 50, seed + 1, (x) => x[0] as string));
+        const shared = [...ka].filter((k) => kb.has(k));
+        expect(shared.length).toBeLessThanOrEqual(5);
+      } finally {
+        a.close();
+        b.close();
+      }
+    }
+  });
+
   it('세션 안에서 같은 스팟을 두 번 내지 않는다 (풀이 충분히 클 때)', () => {
     const h = harness();
     try {
@@ -273,18 +292,26 @@ describe('P3 5.3 SRS 삽입', () => {
       const key = first.spot.key;
       const parsed = parseSpotKey(key);
 
+      // due 스팟은 **동전이 앞면일 때만** 나온다 (5.3-2). 특정 시드 하나에 기대면 시드
+      // 혼합 함수가 바뀔 때마다 이 테스트가 깨진다 — 그 스팟이 나올 때까지 시드를 바꾼다.
+      const askAgain = (): { sessionId: number; cur: NextResult } => {
+        for (let i = 0; i < 50; i++) {
+          const s2 = h.trainer.createSession({ count: 1, seed: 4000 + i });
+          const n = h.trainer.next(s2.sessionId);
+          if (!n.done && n.spot.key === key) return { sessionId: s2.sessionId, cur: n };
+        }
+        throw new Error(`due spot ${key} never came up in 50 sessions`);
+      };
+
       let cur: NextResult = first;
       let sessionId = s.sessionId;
       for (let i = 0; i < 3; i++) {
-        // pending 을 강제로 그 키로 만들기 위해 매번 같은 시드의 1문제 세션을 쓴다.
         if (cur.done) throw new Error('unexpected done');
         const worst = worstAction(h, cur.spot.chartSetId, cur.spot.seq, parsed.combo, cur.spot.actions);
         h.trainer.answer({ sessionId, spotKey: cur.spot.key, action: worst, msTaken: 100 });
         h.clock.advance(DAY_MS + 1000);
-        const s2 = h.trainer.createSession({ count: 1, seed: 4 });
-        sessionId = s2.sessionId;
-        cur = h.trainer.next(sessionId);
-        if (!cur.done && cur.spot.key !== key) break;
+        if (i === 2) break;
+        ({ sessionId, cur } = askAgain());
       }
 
       const report = h.trainer.report({ days: 30 });

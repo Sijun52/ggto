@@ -1,0 +1,18 @@
+# 줄바꿈은 레포 안에서 항상 LF 다 (P3.md 12 DoD 1 / P3 R1 MAJOR 3).
+#
+# 이유: `npm run seed` 는 `data/charts/*.json` 을 LF 로 쓰는데, Windows 기본값
+# (core.autocrlf=true) 으로 클론하면 체크인된 픽스처가 CRLF 로 풀린다. 그러면
+# `packages/trainer/test/fixtures.test.ts` 의 "시드 산출물과 바이트 단위로 같다" 가
+# 새 클론에서만 실패한다. eol=lf 로 체크아웃까지 고정한다.
+* text=auto eol=lf
+
+# JSON 은 바이트 대조 대상이라 명시적으로 다시 못박는다 (text=auto 의 이진 판정에
+# 맡기지 않는다).
+*.json text eol=lf
+
+# 이미지·스냅샷은 손대지 않는다.
+*.png binary
+*.jpg binary
+*.ico binary
+*.zst binary
+*.db binary

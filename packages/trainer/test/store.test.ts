@@ -2,10 +2,13 @@
  * P3.md 4절 기록 DB. **답 하나 = 트랜잭션 하나**와 스키마 버전 규칙.
  */
 
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it } from 'vitest';
 import { SchemaVersionError, TRAINER_SCHEMA_VERSION, migrate } from '../src/schema.js';
-import { applyReview } from '../src/srs.js';
+import { DAY_MS, MAX_INTERVAL_DAYS, applyReview } from '../src/srs.js';
 import { TrainerStore, type AttemptInsert } from '../src/store.js';
 import { T0 } from './helpers.js';
 
@@ -86,7 +89,7 @@ describe('P3 4 답 1건 = 트랜잭션 1개', () => {
     const s = store.getSession(id);
     expect(s?.answered).toBe(1);
     expect(s?.pendingKey).toBeNull();
-    expect(store.getSrs(KEY)?.reps).toBe(1);
+    expect(store.getSrs(KEY, T0)?.reps).toBe(1);
     expect(store.sessionKeys(id).has(KEY)).toBe(true);
     store.close();
   });
@@ -102,7 +105,7 @@ describe('P3 4 답 1건 = 트랜잭션 1개', () => {
     const s = store.getSession(id);
     expect(s?.answered).toBe(0);
     expect(s?.pendingKey).toBe(KEY);
-    expect(store.getSrs(KEY)).toBeNull();
+    expect(store.getSrs(KEY, T0)).toBeNull();
     store.close();
   });
 
@@ -113,7 +116,7 @@ describe('P3 4 답 1건 = 트랜잭션 1개', () => {
     const ok = store.recordAnswer(attempt({ sessionId: id }), applyReview(null, 'Perfect', T0), 'pf:other');
     expect(ok).toBe(false);
     expect(store.getSession(id)?.answered).toBe(0);
-    expect(store.getSrs(KEY)).toBeNull();
+    expect(store.getSrs(KEY, T0)).toBeNull();
     store.close();
   });
 });
@@ -146,5 +149,73 @@ describe('P3 5.3 due / leech 질의', () => {
     expect(leeches[0]?.spotKey).toBe(keys[0]);
     expect(store.srsCounts(later, 3)).toEqual({ due: 3, leeches: 1 });
     store.close();
+  });
+});
+
+describe('P3 5.3 due_at 폭주 방어 (R2 / P3 R1 MAJOR 1)', () => {
+  it('Perfect ×100 을 파일 DB 에 왕복시켜도 읽기가 던지지 않는다', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'ggto-srs-'));
+    try {
+      const store = new TrainerStore(join(dir, 'trainer.db'));
+      const id = store.createSession({ createdAt: T0, seed: 1, count: 200, filter: '{}' });
+      let srs = applyReview(null, 'Perfect', T0);
+      for (let i = 0; i < 100; i++) {
+        store.setPending(id, KEY, T0);
+        // 저장 → 다시 읽기 → 그 값으로 다음 복습. 실제 answer() 경로와 같은 순환이다.
+        expect(store.recordAnswer(attempt({ sessionId: id, createdAt: T0 + i }), srs, KEY)).toBe(true);
+        const read = store.getSrs(KEY, T0);
+        expect(read).not.toBeNull();
+        expect(read?.reps).toBe(i + 1);
+        expect(read?.intervalDays).toBeLessThanOrEqual(MAX_INTERVAL_DAYS);
+        expect(Number.isSafeInteger(read?.dueAt ?? NaN)).toBe(true);
+        srs = applyReview(read, 'Perfect', T0);
+      }
+      expect(store.getSession(id)?.answered).toBe(100);
+      store.close();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('2^53 을 넘는 due_at 이 이미 저장돼 있어도 세 질의가 전부 살아 있다', () => {
+    // 상한 없던 판(Perfect ×16)이 실제로 남긴 값. node:sqlite 는 이런 정수를 읽을 때 던진다.
+    const BROKEN_DUE_AT = 10_444_497_534_716_632n;
+    const dir = mkdtempSync(join(tmpdir(), 'ggto-srs-legacy-'));
+    try {
+      const path = join(dir, 'trainer.db');
+      const store = new TrainerStore(path);
+      const id = store.createSession({ createdAt: T0, seed: 1, count: 5, filter: '{}' });
+      store.setPending(id, KEY, T0);
+      store.recordAnswer(attempt({ sessionId: id }), applyReview(null, 'Perfect', T0), KEY);
+      store.close();
+
+      // 저장소를 거치지 않고 직접 망가뜨린다 (구버전이 써 놓은 상태의 재현).
+      const raw = new DatabaseSync(path);
+      raw.prepare('UPDATE srs_state SET due_at = ?, lapses = 3 WHERE spot_key = ?').run(BROKEN_DUE_AT, KEY);
+      // 진짜로 읽을 수 없는 값인지 확인한다 — 그렇지 않으면 이 테스트는 아무것도 증명하지 않는다.
+      expect(() => raw.prepare('SELECT due_at FROM srs_state WHERE spot_key = ?').get(KEY)).toThrow();
+      raw.close();
+
+      const reopened = new TrainerStore(path);
+      const later = T0 + 10 * DAY_MS;
+      const read = reopened.getSrs(KEY, later);
+      expect(read?.dueAt).toBe(later + MAX_INTERVAL_DAYS * DAY_MS);
+      expect(() => reopened.dueSpots(later, 10)).not.toThrow();
+      expect(() => reopened.leechSpots(later, 3, 10)).not.toThrow();
+      expect(reopened.srsCounts(later, 3)).toEqual({ due: 0, leeches: 1 });
+      // 다음 답 한 번으로 행이 정상 범위로 복구된다.
+      reopened.setPending(id, KEY, later);
+      reopened.recordAnswer(
+        attempt({ sessionId: id, createdAt: later }),
+        applyReview(read, 'Perfect', later),
+        KEY,
+      );
+      const healed = reopened.getSrs(KEY, later);
+      expect(healed?.intervalDays).toBeLessThanOrEqual(MAX_INTERVAL_DAYS);
+      expect(reopened.dueSpots(later + 400 * DAY_MS, 10)).toHaveLength(1);
+      reopened.close();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

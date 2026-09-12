@@ -12,6 +12,24 @@ export const INITIAL_EASE = 2.5;
 export const MIN_EASE = 1.3;
 /** lapses 가 이 값 이상이면 leech: 세션 앞에 강제 배치된다 (P3.md 5.3-1). */
 export const LEECH_LAPSES = 3;
+/**
+ * 간격 상한 (P3.md 5.3, R2 / P3 R1 MAJOR 1).
+ *
+ * 상한이 없으면 `interval = round(interval × ease)` 가 지수로 자란다: Perfect 16회면
+ * 1.2e8 일, `due_at = now + interval × 86_400_000` 이 1.04e16 > 2^53 이 되어 `node:sqlite`
+ * 가 그 행을 **읽을 때** ERR_OUT_OF_RANGE 로 던지고, `answer` 가 500 이 되면서 pending 이
+ * 남아 세션이 영구히 멈춘다. 트레이너의 목적상 1년에 한 번은 다시 보는 것이 맞으므로
+ * 365 로 막는다. `ease` 는 막지 않는다 — 간격이 막히면 폭주하지 않는다.
+ */
+export const MAX_INTERVAL_DAYS = 365;
+
+/**
+ * 저장된 `due_at` 을 읽을 때 씌우는 상한 (P3.md 5.3 R2).
+ * 상한 도입 **이전에** 쓰인 비정상 행이 사용자 DB 에 남아 있어도 읽기가 죽지 않아야 한다.
+ */
+export function dueCapAt(now: number): number {
+  return now + MAX_INTERVAL_DAYS * DAY_MS;
+}
 
 const QUALITY: Record<Verdict, number> = {
   Perfect: 5,
@@ -61,6 +79,9 @@ export function applyReview(prev: SrsState | null, verdict: Verdict, now: number
     reps += 1;
     intervalDays = reps === 1 ? 1 : reps === 2 ? 6 : Math.round(base.intervalDays * base.ease);
   }
+  // 상한은 두 분기 뒤에 한 번만 건다 (P3.md 5.3 R2). base.intervalDays 가 이미 비정상적으로
+  // 큰 값(상한 이전에 저장된 행)이어도 여기서 정상 범위로 돌아온다.
+  intervalDays = Math.min(intervalDays, MAX_INTERVAL_DAYS);
   const ease = Math.max(MIN_EASE, base.ease + 0.1 - (5 - q) * (0.08 + (5 - q) * 0.02));
 
   return {

@@ -305,6 +305,36 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+/**
+ * P3.md 0.3 / D8: **화면 어디에도** "정답/오답" 이란 말이 없다. 부정문("정답/오답이 아니라
+ * …")도 위반이다 — 사용자는 그 단어를 읽는다. 출제 화면과 답 후 화면 **둘 다** 본다
+ * (R1 MINOR 2: 답 후에만 검사해서 출제 화면 안내문을 놓쳤다).
+ */
+function expectNoRightWrongWords(): void {
+  const text = document.body.textContent ?? '';
+  for (const word of ['정답', '오답', '맞았', '틀렸']) expect(text).not.toContain(word);
+}
+
+describe('P3 0.3 화면에 "정답/오답" 이 없다 (D8)', () => {
+  it('P3 0.3 출제 화면(마스크)에 "정답/오답" 이 없다', async () => {
+    installStubContext();
+    await startSession();
+    // 안내문이 실제로 렌더되는지부터 확인한다 (빈 화면을 통과시키지 않는다).
+    expect(document.body.textContent).toContain('EV 손실로 채점');
+    expectNoRightWrongWords();
+  });
+
+  it('P3 0.3 답 후 화면에도 없다', async () => {
+    installStubContext();
+    await startSession();
+    fireEvent.click(screen.getByTestId('answer-A'));
+    await waitFor(() => {
+      expect(screen.getByTestId('grade-box')).toBeTruthy();
+    });
+    expectNoRightWrongWords();
+  });
+});
+
 describe('P3 8.3 답하기 전에는 정답이 브라우저에 없다', () => {
   it('P3 8.3 출제 화면에서 /api/charts/:id/node 요청이 0건이다', async () => {
     installStubContext();
@@ -455,6 +485,8 @@ describe('P3 8.3 혼합 스팟에서 저빈도 액션도 Perfect 다 (D8 을 UI 
     useUiStore.setState({ sessionId: null, spotIndex: 0, phase: 'idle', spotShownAt: 0 });
     await startSession();
     expect(screen.getByRole('grid').getAttribute('data-selected')).toBe('43s');
+    // 출제 화면에서도 검사한다 (답 후에만 보면 안내문을 놓친다 — R1 MINOR 2).
+    expectNoRightWrongWords();
 
     fireEvent.click(screen.getByTestId('answer-F'));
     await waitFor(() => {
@@ -463,9 +495,7 @@ describe('P3 8.3 혼합 스팟에서 저빈도 액션도 Perfect 다 (D8 을 UI 
 
     expect(screen.getByTestId('grade-verdict').textContent).toBe('Perfect');
     expect(screen.getByTestId('grade-mixed').textContent).toContain('혼합');
-    expect(document.body.textContent).not.toContain('오답');
-    expect(document.body.textContent).not.toContain('정답입니다');
-    expect(document.body.textContent).not.toContain('틀렸');
+    expectNoRightWrongWords();
   });
 });
 

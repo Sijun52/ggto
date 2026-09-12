@@ -282,7 +282,7 @@ export function TrainerPage(): React.JSX.Element {
                 <GradeBox grade={answered.grade} colors={colors} onNext={goNext} nextLabel="다음 →" />
               ) : (
                 <p className="text-xs text-slate-500">
-                  액션을 고르면 전략과 EV 가 공개됩니다. 정답/오답이 아니라 EV 손실로 채점합니다.
+                  액션을 고르면 전략과 EV 가 공개됩니다. 빈도가 아니라 EV 손실로 채점합니다.
                 </p>
               )}
             </div>

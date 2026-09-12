@@ -8,7 +8,7 @@
 
 import { DatabaseSync } from 'node:sqlite';
 import { migrate } from './schema.js';
-import type { SrsState } from './srs.js';
+import { dueCapAt, type SrsState } from './srs.js';
 import type { Category, GradedBy, Verdict } from './types.js';
 
 export interface SessionRow {
@@ -191,8 +191,19 @@ export class TrainerStore {
     }
   }
 
-  getSrs(spotKey: string): SrsState | null {
-    const r = this.#db.prepare('SELECT * FROM srs_state WHERE spot_key = ?').get(spotKey) as
+  /**
+   * `now` 는 시계가 아니라 **읽기 상한**이다 (P3.md 5.3 R2): `due_at` 을 `MIN(due_at, now+365일)`
+   * 로 꺼낸다. 간격 상한이 없던 판이 써 놓은 2^53 초과 행이 사용자 DB 에 남아 있으면
+   * `node:sqlite` 가 읽는 순간 ERR_OUT_OF_RANGE 로 던지고 답이 통째로 막히기 때문이다.
+   * SQLite 쪽에서 MIN 을 계산하므로 JS 로는 정상 범위 값만 건너온다.
+   */
+  getSrs(spotKey: string, now: number): SrsState | null {
+    const r = this.#db
+      .prepare(
+        'SELECT ease, interval_days, reps, lapses, MIN(due_at, ?) AS due_at, last_verdict, updated_at ' +
+          'FROM srs_state WHERE spot_key = ?',
+      )
+      .get(dueCapAt(now), spotKey) as
       | {
           ease: number;
           interval_days: number;
@@ -218,8 +229,11 @@ export class TrainerStore {
   /** due 인 스팟을 오래된 순으로. 필터(풀 존재·카테고리)는 호출 측이 건다 — 여기는 SQL 만 안다. */
   dueSpots(now: number, limit: number): DueSpot[] {
     const rows = this.#db
-      .prepare('SELECT spot_key, due_at, lapses FROM srs_state WHERE due_at <= ? ORDER BY due_at, spot_key LIMIT ?')
-      .all(now, limit) as unknown as { spot_key: string; due_at: number; lapses: number }[];
+      .prepare(
+        'SELECT spot_key, MIN(due_at, ?) AS due_at, lapses FROM srs_state WHERE due_at <= ? ' +
+          'ORDER BY due_at, spot_key LIMIT ?',
+      )
+      .all(dueCapAt(now), now, limit) as unknown as { spot_key: string; due_at: number; lapses: number }[];
     return rows.map((r) => ({ spotKey: r.spot_key, dueAt: r.due_at, lapses: r.lapses }));
   }
 
@@ -227,10 +241,14 @@ export class TrainerStore {
   leechSpots(now: number, minLapses: number, limit: number): DueSpot[] {
     const rows = this.#db
       .prepare(
-        'SELECT spot_key, due_at, lapses FROM srs_state WHERE lapses >= ? AND due_at <= ? ' +
+        'SELECT spot_key, MIN(due_at, ?) AS due_at, lapses FROM srs_state WHERE lapses >= ? AND due_at <= ? ' +
           'ORDER BY due_at, spot_key LIMIT ?',
       )
-      .all(minLapses, now, limit) as unknown as { spot_key: string; due_at: number; lapses: number }[];
+      .all(dueCapAt(now), minLapses, now, limit) as unknown as {
+      spot_key: string;
+      due_at: number;
+      lapses: number;
+    }[];
     return rows.map((r) => ({ spotKey: r.spot_key, dueAt: r.due_at, lapses: r.lapses }));
   }
 
