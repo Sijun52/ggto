@@ -1,7 +1,7 @@
 # P3M 스펙 — 모바일 UX (트레이너 1순위) · 다이어그램 규칙 · 다른 PC 에서 이어받기
 
 작성: ggto-architect, 2026-09-12 (P3 R1 리뷰와 같은 날). 대상: ggto-dev.
-전제: `docs/specs/P3.md` (R2), `docs/reviews/P3-round1.md` (MINOR 1·2·8 이 여기로 이월), `DESIGN.md` 1절(프론트 스택)·6.5. **시작 조건: P3 APPROVED** (P3 R2 의 MAJOR 3건은 이 문서와 무관하게 먼저 닫는다).
+전제: `docs/specs/P3.md` (R2), `docs/reviews/P3-round1.md` (MINOR 1·2·8 이 여기로 이월), `DESIGN.md` 1절(프론트 스택)·6.5. **시작 조건: P3 APPROVED — 충족** (P3 R2 APPROVED 2026-09-12, `docs/reviews/P3-round2.md`; MAJOR 1~3 닫힘). P3 이월 항목의 P3M/P4 배분은 **13절**.
 **이 문서는 설계 전제를 하나 바꾼다**: 지금까지 UI 는 "데스크톱 브라우저, 마우스" 전제였다. 사용자는 **대부분 휴대폰으로** 쓴다. 따라서 (1) 375px 폭에서 모든 화면이 성립해야 하고, (2) 호버가 없고, (3) 트레이너의 답 버튼은 한 손 엄지로 눌러야 하며, (4) 휴대폰이 PC 의 서버에 **접속할 수 있어야** 한다 (지금은 `127.0.0.1` 바인드라 불가능하다 — 7절).
 
 ## 0. 목표와 완료 그림
@@ -125,7 +125,8 @@
 - 상태줄: 선택 셀이 있으면 `선택: A7o …`, 호버 없는 환경(`matchMedia` 모킹 `pointer: coarse`)에서 `onMouseMove` 가 상태를 바꾸지 않는다.
 - `AnswerBar`: 출제 중 버튼 = actions 순서, 답 후 verdict + "다음", "다음" 은 공개 후 500ms 비활성 (`vi.useFakeTimers`).
 - 리포트: `< md` 모킹 시 `report-card-*` 렌더, `≥ md` 시 표.
-- D8 UI: 출제 화면 **및** 답 후 화면 `document.body.textContent` 에 `정답`/`오답` 없음 (P3 R1 MINOR 2).
+- D8 UI: 출제 화면 **및** 답 후 화면 `document.body.textContent` 에 `정답`/`오답`/`맞았`/`틀렸` 없음 — **P3 R2 에서 이미 추가됨** (`web/test/TrainerPage.test.tsx` `P3 0.3` 2건 + 혼합 스팟 테스트). P3M 은 `AnswerBar` 개편 뒤에도 이 세 테스트가 그대로 통과해야 한다 (하단 바 문구에 그 단어를 넣지 않는다).
+- `web/test/fixtures/hu-pushfold-10bb.json` 바이트 대조 가드 (P3 R1 MINOR 4): `data/charts/hu-pushfold-10bb.json` 이 있을 때만 바이트 단위로 같은지 (`packages/trainer/test/fixtures.test.ts` 와 같은 규칙).
 
 ### 8.2 `npm run check:mobile` (`tools/shots/mobile.mjs`, headless Chrome CDP, 375×812 DPR 2 `mobile:true`) — 리뷰어가 Browser 도구 `resize_window preset:"mobile"` 로 같은 것을 본다
 각 항목이 assert 이고 실패하면 exit 1:
@@ -141,7 +142,7 @@
 1. 캔버스 520px, 우측 열 격자 옆 (`grade-box.left > canvas.right`).
 2. 답 후 `grade-verdict`·`next-spot` 이 스크롤 0 에서 뷰포트 안 — **1280×720 에서도** (P3 R1 MINOR 1).
 3. 뷰어: 셀 클릭 → 콤보 패널이 접힘 헤더로 나타나고 펼치면 격자 아래. reach 모드 패널 동작 (P2 R1 MINOR 3 테스트 유지).
-4. 기존 web 테스트 90 + 신규 전부 통과, `npm run ci` exit 0. 스크린샷 `P3M-desktop-1280-revealed.png`, `P3M-desktop-1500-revealed.png` 를 P3 스크린샷과 나란히.
+4. 기존 web 테스트 73 (P3 R2 기준; R1 표의 90 은 trainer 와 라벨이 바뀐 것) + 신규 전부 통과, `npm run ci` exit 0. 스크린샷 `P3M-desktop-1280-revealed.png`, `P3M-desktop-1500-revealed.png` 를 P3 스크린샷과 나란히.
 
 ### 8.4 Definition of Done
 1. `npm run ci` exit 0 + fresh clone `clone → install → seed → ci` exit 0 (P3 R2 DoD 1 과 동일).
@@ -159,7 +160,7 @@ P3 R1 에서 `git clone → npm install → npm run ci → npm run seed` 를 실
 
 | # | 항목 | 상태 | 할 일 |
 |---|---|---|---|
-| H1 | **CRLF** — Windows 기본 `core.autocrlf=true` 에서 픽스처 JSON 이 CRLF 로 체크아웃되어 `seed` 후 `fixtures.test` 실패 | **깨짐** (P3 R1 MAJOR 3) | `.gitattributes` `* text=auto eol=lf` + renormalize. P3 R2 에서 닫는다 |
+| H1 | **CRLF** — Windows 기본 `core.autocrlf=true` 에서 픽스처 JSON 이 CRLF 로 체크아웃되어 `seed` 후 `fixtures.test` 실패 | **닫힘** (P3 R2: `.gitattributes` + renormalize, 리뷰어 fresh clone `autocrlf=true` 에서 `w/crlf` 0 · 시드 산출물 = 픽스처 sha256 동일 · ci exit 0) | 없음. 개발 PC 작업 트리에 남은 `i/lf w/crlf` 4파일은 `git checkout -- .` 로 정리 (커밋 불필요) |
 | H2 | Node 버전 고정 | `engines` 없음. `node:sqlite`·`zstdCompressSync` 는 Node 24 필요 | 루트 `package.json` `"engines": { "node": ">=24" }` + `.node-version` (`24`) + `npm install` 시 경고가 아니라 실패하도록 `.npmrc` `engine-strict=true` |
 | H3 | `data/` 재생성 | `npm run seed` **6초**, 결정적 — 해시 6/6 동일, 파일 바이트 동일 (fresh clone 실측). `tools/chart-gen/data/equity169.json` (전수 표, 250KB) 는 **커밋돼 있어** 재계산 불필요 | 없음. README 의 "최초 1회" 문구 유지 |
 | H4 | `data/trainer.db` (사용자 기록·SRS) | gitignore. **PC 마다 따로 쌓인다** | 지금은 수용한다 — 휴대폰 사용은 어차피 한 PC 의 서버로 붙는다 (7절). 옮기려면 서버를 끈 뒤 `data/trainer.db` (WAL 체크포인트 후 단일 파일) 를 복사. 익스포트/임포트 CLI 는 P3 "만들지 않는 것" 그대로 — 필요해지면 별도 스펙 |
@@ -188,3 +189,25 @@ P3 R1 에서 `git clone → npm install → npm run ci → npm run seed` 를 실
 - 대비 표 재측정 (`palette.ts` 의 실제 hex 로).
 - `GGTO_HOST=0.0.0.0` 기동 로그에 LAN URL 과 경고, 기본 기동은 여전히 `127.0.0.1` 만 (`netstat -ano | findstr 7777`).
 - `tools/shots/*.mjs` 가 새 클론에서 `GGTO_CHROME` 만 주면 도는지.
+
+## 13. P3 이월 항목 — P3M 에서 처리 / P4 이후로 미룸 (P3 R2 APPROVED 시점 확정)
+
+원칙: P3M 은 `web/src` + `tools/shots` + `main.ts` host 한 줄만 건드린다 (2절·8.4 DoD 8). 따라서 `packages/*` 에 손대는 항목은 전부 **P4 첫 커밋**으로 보낸다 — P3M 의 "packages 무변경" 게이트를 흐리지 않기 위해서다.
+
+| 출처 | 항목 | 배치 | 어디서 어떻게 |
+|---|---|---|---|
+| P3 R1 MINOR 1 | 1280×720 에서 답 후 verdict·"다음" 이 화면 밖 (`hidePanel` 콤보 패널이 우측 열을 밀어냄) | **P3M** | 3절 콤보 패널 접힘 기본 + 8.3-2 데스크톱 회귀 게이트 |
+| P3 R1 MINOR 2 | 출제 화면 안내문 "정답/오답" | **닫힘** (P3 R2) | 8.1 D8 항목은 유지 검사만 |
+| P3 R1 MINOR 3 | `packages/trainer/src/service.ts` 341줄 (300 초과) — `report()`/`parseFilter`/`drawSeed` 분리 | **P4 이후** | packages 변경. P4 스펙의 "정리" 항목으로 |
+| P3 R1 MINOR 4 | `web/test/fixtures/hu-pushfold-10bb.json` 에 `data/charts` 바이트 대조 가드 없음 | **P3M** | `web/test` 는 P3M 범위. `packages/trainer/test/fixtures.test.ts` 와 같은 가드 (있을 때만 비교) 를 `web/test` 에 추가. 8.1 에 한 줄 |
+| P3 R1 MINOR 5 | `packages/server/src/app.ts` 500 마다 스택 전체 로깅 — 재시도 루프에서 분당 수만 줄 | **P4 이후** | packages 변경 (P3M 의 `main.ts` 예외는 host 한 줄뿐) |
+| P3 R1 MINOR 6 | `pool.ts mass` = Σ reachHero/1326 — 6-max `vs_jam` 에서 상대 잼 빈도 미반영 | **P6 스펙** | 지금 작업 없음 (R1 판정 그대로) |
+| P3 R1 MINOR 7 | 스펙 13절 `ev` grep 거짓 양성 | **닫힘** (P3.md R2) | — |
+| P3 R1 MINOR 8 | verdict 칩·보조 문구 대비 WCAG AA 미달 | **P3M** | 5절 표 + `palette.ts` + DoD 4 |
+| P3 R2 MINOR 1 | `kill.test` `mid` 가 SIGKILL 과 throw 를 구분 못 함 (Windows 둘 다 status 1) + srs/attempt 순서 바뀌면 조용히 무의미 | **P4 이후** | `killRunner.mjs`: attempt 마지막 인자 게터로 순서 플래그, `uncaughtException → exit 4`, 마커 파일 + `status ∉ {0,3,4,5}` + stderr 무오류 단언 |
+| P3 R2 MINOR 2 | `killRunner.mjs` 가 낡은 dist 를 침묵하고 시험 | **P4 이후** | dist/src mtime 비교 throw 한 줄 |
+| P3 R2 MINOR 3 | 상한 도입 전 저장된 `srs_state` 폭주 행 (리뷰 DB 기준 100행) 이 SRS 큐에서 사실상 빠짐 — 읽기는 안전, 우연 재출제 때만 치유 | **P4 이후** | `TrainerStore` 생성자에서 멱등 `UPDATE srs_state SET interval_days = MIN(interval_days, 365), due_at = MIN(due_at, updated_at + 365·DAY_MS) WHERE interval_days > 365`. `user_version` bump 불필요 (DDL 불변) |
+| P3 R2 MINOR 4 | 개발 PC 작업 트리 `i/lf w/crlf` 4파일 | **지금** | `git checkout -- .` (커밋 없음) |
+
+P3M DoD 에 추가되는 것은 R1 MINOR 4 의 가드 하나뿐이다 (8.1 마지막 항목). 나머지 P3M 항목은 이미 3·5·8절에 들어 있다.
+
