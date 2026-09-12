@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 470" width="900" height="470" font-family="ui-sans-serif, -apple-system, 'Segoe UI', 'Malgun Gothic', 'Apple SD Gothic Neo', 'Noto Sans KR', Roboto, Arial, sans-serif">
+  <defs>
+    <marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#475569"/>
+    </marker>
+    <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#dc2626"/>
+    </marker>
+    <marker id="a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#059669"/>
+    </marker>
+    <marker id="a4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#c026d3"/>
+    </marker>
+    <style>
+      .ttl { font-size: 14.5px; fill: #0f172a; font-weight: 600; }
+      .lbl { font-size: 12px;   fill: #334155; }
+      .xs  { font-size: 10.5px; fill: #64748b; }
+      .tag { font-size: 10.5px; font-weight: 600; letter-spacing: .05em; }
+      .mono{ font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; }
+    </style>
+  </defs>
+
+  <rect width="900" height="470" fill="#f8fafc"/>
+  <text class="ttl" x="24" y="34">2-에이전트 개발 루프</text>
+  <text class="xs" x="184" y="34">각 페이즈는 Fable 이 APPROVED 를 낼 때까지 끝나지 않는다</text>
+
+  <!-- 1 spec -->
+  <rect x="24" y="62" width="232" height="104" rx="10" fill="#faf5ff" stroke="#e9d5ff"/>
+  <rect x="24" y="62" width="232" height="24" rx="10" fill="#f3e8ff"/>
+  <rect x="24" y="76" width="232" height="10" fill="#f3e8ff"/>
+  <text class="tag" x="40" y="79" fill="#7e22ce">FABLE · 아키텍트</text>
+  <text class="ttl" x="40" y="110">① 스펙 작성</text>
+  <text class="xs" x="40" y="130">모듈·시그니처·테스트 기댓값</text>
+  <text class="xs" x="40" y="146">알려진 정답값을 직접 계산해 박는다</text>
+  <text class="xs" x="40" y="160">Definition of Done</text>
+
+  <!-- 2 impl -->
+  <rect x="334" y="62" width="232" height="104" rx="10" fill="#eff6ff" stroke="#bfdbfe"/>
+  <rect x="334" y="62" width="232" height="24" rx="10" fill="#dbeafe"/>
+  <rect x="334" y="76" width="232" height="10" fill="#dbeafe"/>
+  <text class="tag" x="350" y="79" fill="#1d4ed8">OPUS · 개발자</text>
+  <text class="ttl" x="350" y="110">② 구현</text>
+  <text class="xs" x="350" y="130">스펙대로 코드 + 테스트</text>
+  <text class="xs" x="350" y="146">typecheck · test 돌리고</text>
+  <text class="xs" x="350" y="160">출력 전문을 그대로 제출</text>
+
+  <!-- 3 verify -->
+  <rect x="644" y="62" width="232" height="104" rx="10" fill="#faf5ff" stroke="#e9d5ff"/>
+  <rect x="644" y="62" width="232" height="24" rx="10" fill="#f3e8ff"/>
+  <rect x="644" y="76" width="232" height="10" fill="#f3e8ff"/>
+  <text class="tag" x="660" y="79" fill="#7e22ce">FABLE · 아키텍트</text>
+  <text class="ttl" x="660" y="110">③ 독립 검증</text>
+  <text class="xs" x="660" y="130">보고를 믿지 않는다 — 직접 재현</text>
+  <text class="xs" x="660" y="146">자체 검증 스크립트를 새로 짠다</text>
+  <text class="xs" x="660" y="160">브라우저·픽셀·전수 열거</text>
+
+  <line x1="256" y1="114" x2="330" y2="114" stroke="#475569" stroke-width="1.5" marker-end="url(#a1)"/>
+  <line x1="566" y1="114" x2="640" y2="114" stroke="#475569" stroke-width="1.5" marker-end="url(#a1)"/>
+
+  <!-- pushback -->
+  <path d="M450 166 L450 196 L760 196 L760 170" fill="none" stroke="#c026d3" stroke-width="1.4" stroke-dasharray="5 3" marker-end="url(#a4)"/>
+  <text class="xs" x="530" y="190" fill="#a21caf">반박 — 스펙이 틀렸다고 판단되면 근거를 대고 되돌린다 (누적 7건 수용)</text>
+
+  <!-- verdict -->
+  <rect x="644" y="224" width="232" height="44" rx="8" fill="#ffffff" stroke="#cbd5e1"/>
+  <text class="lbl mono" x="760" y="251" text-anchor="middle">VERDICT</text>
+  <line x1="760" y1="166" x2="760" y2="220" stroke="#475569" stroke-width="1.5" marker-end="url(#a1)"/>
+
+  <!-- changes required loop -->
+  <path d="M644 246 L500 246 L500 300 L390 300 L390 178" fill="none" stroke="#dc2626" stroke-width="1.5" marker-end="url(#a2)"/>
+  <rect x="512" y="284" width="180" height="34" rx="6" fill="#fef2f2" stroke="#fecaca"/>
+  <text class="tag" x="602" y="299" text-anchor="middle" fill="#b91c1c">CHANGES_REQUIRED</text>
+  <text class="xs" x="602" y="313" text-anchor="middle">CRITICAL·MAJOR 가 하나라도 있으면</text>
+
+  <!-- approved -->
+  <path d="M760 268 L760 340" fill="none" stroke="#059669" stroke-width="1.6" marker-end="url(#a3)"/>
+  <rect x="644" y="344" width="232" height="46" rx="8" fill="#ecfdf5" stroke="#a7f3d0"/>
+  <text class="tag" x="760" y="364" text-anchor="middle" fill="#047857">APPROVED</text>
+  <text class="xs" x="760" y="380" text-anchor="middle">CRITICAL·MAJOR 0 일 때만</text>
+
+  <path d="M644 367 L560 367 L560 400 L150 400 L150 178" fill="none" stroke="#059669" stroke-width="1.5" marker-end="url(#a3)"/>
+  <text class="xs" x="300" y="394" fill="#047857">다음 페이즈 스펙 작성으로</text>
+
+  <!-- footer stats -->
+  <text class="xs" x="24" y="434" fill="#64748b">이 루프가 실제로 잡아낸 것 — URL 의 <tspan class="mono" fill="#334155">+</tspan> 가 공백으로 디코딩돼 162콤보가 22콤보로 바뀌던 버그 · 커밋돼야 할 에퀴티 표가 .gitignore 에 걸린 것</text>
+  <text class="xs" x="24" y="452" fill="#64748b">fresh clone 에서만 깨지던 CI · 스펙 자체의 자기모순 3건 · 오케스트레이터가 잘못 적은 에퀴티 기준값</text>
+</svg>

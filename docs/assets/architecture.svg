@@ -1,0 +1,115 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 660" width="900" height="660" font-family="ui-sans-serif, -apple-system, 'Segoe UI', 'Malgun Gothic', 'Apple SD Gothic Neo', 'Noto Sans KR', Roboto, Arial, sans-serif">
+  <defs>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#64748b"/>
+    </marker>
+    <style>
+      .lbl  { font-size: 13px; fill: #0f172a; }
+      .sm   { font-size: 11.5px; fill: #475569; }
+      .xs   { font-size: 10.5px; fill: #64748b; }
+      .hdr  { font-size: 12px; fill: #475569; font-weight: 600; letter-spacing: .06em; }
+      .ttl  { font-size: 14px; fill: #0f172a; font-weight: 600; }
+      .mono { font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; }
+    </style>
+  </defs>
+
+  <rect width="900" height="660" fill="#f8fafc"/>
+
+  <!-- ── browser ─────────────────────────────────────────── -->
+  <rect x="24" y="24" width="852" height="168" rx="10" fill="#ffffff" stroke="#cbd5e1"/>
+  <text class="hdr" x="44" y="50">브라우저 · localhost:7777</text>
+  <text class="xs" x="205" y="50">React SPA (web/) — Vite + React 19 + Tailwind v4 + TanStack Query + Zustand</text>
+
+  <g>
+    <rect x="44" y="64" width="190" height="46" rx="7" fill="#eff6ff" stroke="#bfdbfe"/>
+    <text class="lbl" x="139" y="84" text-anchor="middle">Range</text>
+    <text class="xs" x="139" y="99" text-anchor="middle">P1 · 레인지 격자</text>
+
+    <rect x="246" y="64" width="190" height="46" rx="7" fill="#eff6ff" stroke="#bfdbfe"/>
+    <text class="lbl" x="341" y="84" text-anchor="middle">차트 뷰어</text>
+    <text class="xs" x="341" y="99" text-anchor="middle">P2 · 프리플랍</text>
+
+    <rect x="448" y="64" width="190" height="46" rx="7" fill="#ecfdf5" stroke="#a7f3d0"/>
+    <text class="lbl" x="543" y="84" text-anchor="middle">트레이너</text>
+    <text class="xs" x="543" y="99" text-anchor="middle">P3 · 출제·채점</text>
+
+    <rect x="650" y="64" width="206" height="46" rx="7" fill="#f1f5f9" stroke="#cbd5e1" stroke-dasharray="4 3"/>
+    <text class="lbl" x="753" y="84" text-anchor="middle" fill="#64748b">포스트플랍</text>
+    <text class="xs" x="753" y="99" text-anchor="middle">P5 · 예정</text>
+  </g>
+
+  <rect x="44" y="122" width="812" height="50" rx="7" fill="#fafafa" stroke="#e2e8f0"/>
+  <text class="sm" x="60" y="141">공용 컴포넌트</text>
+  <text class="xs mono" x="60" y="159">RangeGrid (Canvas) · ChartNodeView · ComboPanel · StrategyBar · GradeBox</text>
+  <text class="xs" x="700" y="150" fill="#059669">트레이너는 뷰어를 masked 로 재사용</text>
+
+  <!-- arrow -->
+  <line x1="450" y1="192" x2="450" y2="222" stroke="#64748b" stroke-width="1.4" marker-end="url(#ar)"/>
+  <text class="xs" x="462" y="212">HTTP JSON · SSE(P4)</text>
+
+  <!-- ── server ─────────────────────────────────────────── -->
+  <rect x="24" y="224" width="852" height="252" rx="10" fill="#ffffff" stroke="#cbd5e1"/>
+  <text class="hdr" x="44" y="250">@ggto/server · Hono · 단일 Node 프로세스 · 127.0.0.1:7777</text>
+
+  <g>
+    <rect x="44" y="264" width="188" height="34" rx="6" fill="#f8fafc" stroke="#e2e8f0"/>
+    <text class="sm mono" x="138" y="286" text-anchor="middle">routes/range</text>
+    <rect x="244" y="264" width="188" height="34" rx="6" fill="#f8fafc" stroke="#e2e8f0"/>
+    <text class="sm mono" x="338" y="286" text-anchor="middle">routes/charts</text>
+    <rect x="444" y="264" width="188" height="34" rx="6" fill="#f8fafc" stroke="#e2e8f0"/>
+    <text class="sm mono" x="538" y="286" text-anchor="middle">routes/trainer</text>
+    <rect x="644" y="264" width="212" height="34" rx="6" fill="#f8fafc" stroke="#e2e8f0" stroke-dasharray="4 3"/>
+    <text class="sm mono" x="750" y="286" text-anchor="middle" fill="#94a3b8">routes/solve (P4)</text>
+  </g>
+
+  <line x1="138" y1="298" x2="138" y2="318" stroke="#cbd5e1" stroke-width="1.2"/>
+  <line x1="338" y1="298" x2="338" y2="318" stroke="#cbd5e1" stroke-width="1.2"/>
+  <line x1="538" y1="298" x2="538" y2="318" stroke="#cbd5e1" stroke-width="1.2"/>
+  <line x1="750" y1="298" x2="750" y2="318" stroke="#cbd5e1" stroke-width="1.2"/>
+
+  <g>
+    <rect x="244" y="318" width="188" height="52" rx="7" fill="#eff6ff" stroke="#bfdbfe"/>
+    <text class="lbl mono" x="338" y="338" text-anchor="middle">@ggto/preflop</text>
+    <text class="xs" x="338" y="355" text-anchor="middle">스키마 · 저장소 · reach</text>
+
+    <rect x="444" y="318" width="188" height="52" rx="7" fill="#ecfdf5" stroke="#a7f3d0"/>
+    <text class="lbl mono" x="538" y="338" text-anchor="middle">@ggto/trainer</text>
+    <text class="xs" x="538" y="355" text-anchor="middle">출제 · 채점 · SRS</text>
+
+    <rect x="644" y="318" width="212" height="52" rx="7" fill="#f1f5f9" stroke="#cbd5e1" stroke-dasharray="4 3"/>
+    <text class="lbl mono" x="750" y="338" text-anchor="middle" fill="#64748b">@ggto/solver</text>
+    <text class="xs" x="750" y="355" text-anchor="middle">Solver 인터페이스 · 잡큐</text>
+  </g>
+
+  <rect x="44" y="390" width="812" height="66" rx="8" fill="#fffbeb" stroke="#fde68a"/>
+  <text class="ttl mono" x="60" y="412">@ggto/core</text>
+  <text class="xs" x="153" y="412">런타임 의존성 0 · 순수 함수만</text>
+  <text class="sm" x="60" y="434">Card · Combo(1326) · HandClass(169) · Range · 핸드 평가기 · 에퀴티</text>
+  <text class="sm" x="60" y="450">보드 동형 정규화 · 액션 시퀀스 문자열 · 프리플랍 상태 기계</text>
+  <text class="xs" x="700" y="428" fill="#a16207">UI·DB·HTTP를</text>
+  <text class="xs" x="700" y="443" fill="#a16207">전혀 모른다</text>
+
+  <!-- ── data ─────────────────────────────────────────── -->
+  <line x1="338" y1="476" x2="338" y2="506" stroke="#64748b" stroke-width="1.4" marker-end="url(#ar)"/>
+  <line x1="538" y1="476" x2="538" y2="506" stroke="#64748b" stroke-width="1.4" marker-end="url(#ar)"/>
+  <line x1="750" y1="476" x2="750" y2="506" stroke="#64748b" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#ar)"/>
+  <text class="xs" x="762" y="496">stdio JSON-lines RPC</text>
+
+  <g>
+    <rect x="24" y="508" width="290" height="60" rx="8" fill="#ffffff" stroke="#cbd5e1"/>
+    <text class="sm mono" x="44" y="530">data/ggto.db</text>
+    <text class="xs" x="44" y="548">차트셋 · 노드 (node:sqlite, zstd 블롭)</text>
+
+    <rect x="326" y="508" width="290" height="60" rx="8" fill="#ffffff" stroke="#cbd5e1"/>
+    <text class="sm mono" x="346" y="530">data/trainer.db</text>
+    <text class="xs" x="346" y="548">시도 기록 · SRS 상태 (사용자 데이터)</text>
+
+    <rect x="628" y="508" width="248" height="60" rx="8" fill="#fef2f2" stroke="#fecaca"/>
+    <text class="sm mono" x="648" y="530">ggto-solver-cli</text>
+    <text class="xs" x="648" y="548">Rust · postflop-solver · AGPL 경계</text>
+  </g>
+
+  <text class="xs" x="24" y="594" fill="#94a3b8">계층 규칙 — core 는 위를 모른다 · 계산은 1326 콤보, 표시만 169 격자 · 서버에 SQL 없음 · 솔버는 별도 프로세스</text>
+  <text class="xs" x="24" y="612" fill="#94a3b8">점선 = 미구현(P4/P5) · 액션 시퀀스 문자열이 캐시 키이자 URL 파라미터이자 DB 컬럼이다</text>
+  <text class="xs" x="24" y="640" fill="#cbd5e1">GGTO · docs/assets/architecture.svg</text>
+</svg>
