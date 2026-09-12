@@ -1,13 +1,15 @@
 import { resolve } from 'node:path';
+import { comboCards, equityHandVsHand, handClassCombos } from '@ggto/core';
 import { CLASS_KEYS } from '@ggto/preflop';
 import { describe, expect, it } from 'vitest';
-import { equitySha256, loadEquityTable, pairSeed } from '../src/equityTable.js';
+import { EQUITY_DECIMALS, equitySha256, loadEquityTable, pairSeed } from '../src/equityTable.js';
 
 const TABLE_PATH = resolve(import.meta.dirname, '../data/equity169.json');
 
 /**
- * 외부에서 아는 정답 (Phase -1 리뷰의 전수 계산 표). MC 표라 오차가 있으므로
- * 스펙 7.1 의 허용치 ±0.5%p 로 본다.
+ * 외부에서 아는 정답 (Phase -1 리뷰의 전수 계산 표). 표가 exact 모드(P3.md 10.0)가 된
+ * 뒤로는 MC 허용치 ±0.5%p 가 아니라 **참조값이 적힌 자릿수까지** 맞아야 한다.
+ * 0.001%p = 참조값 소수 3자리의 마지막 자리 — MC 였다면 절대 통과하지 못한다.
  */
 const REFERENCE: [string, string, number][] = [
   ['AA', 'KK', 81.946],
@@ -16,15 +18,40 @@ const REFERENCE: [string, string, number][] = [
   ['72o', 'AA', 11.8],
 ];
 
+/** 파일에 적힌 자릿수 때문에 생기는 반올림 상한 (5e-7). 대조 허용치는 이것보다 커야 한다. */
+const ROUNDING_BOUND = 0.5 * 10 ** -EQUITY_DECIMALS;
+
+/**
+ * 생성기와 **다른 경로**로 같은 값을 구한다: 슈트 궤도(stabilizer) 축약을 쓰지 않고
+ * 카드가 겹치지 않는 콤보 순서쌍을 전부 돌려 단순 평균한다.
+ * 생성기(exactEquity.ts)가 궤도 축약으로 얻은 값과 이것이 일치하면 축약이 등식임을 뜻한다.
+ */
+function bruteForceClassEquity(a: string, b: string): { equity: number; pairs: number } {
+  const heroCombos = handClassCombos(CLASS_KEYS.indexOf(a));
+  const villainCombos = handClassCombos(CLASS_KEYS.indexOf(b));
+  let acc = 0;
+  let pairs = 0;
+  for (const h of heroCombos) {
+    const hc = comboCards(h);
+    for (const v of villainCombos) {
+      const vc = comboCards(v);
+      if (hc[0] === vc[0] || hc[0] === vc[1] || hc[1] === vc[0] || hc[1] === vc[1]) continue;
+      acc += equityHandVsHand(hc, vc, []).equity;
+      pairs++;
+    }
+  }
+  return { equity: acc / pairs, pairs };
+}
+
 describe('7.1 equity169.json', () => {
   const table = loadEquityTable(TABLE_PATH);
   const at = (a: string, b: string): number =>
     ((table.equity[CLASS_KEYS.indexOf(a)] as number[])[CLASS_KEYS.indexOf(b)] as number) * 100;
 
-  it('7.1 알려진 전수 계산값 4개와 ±0.5%p 안에서 일치한다', () => {
+  it('7.1 알려진 전수 계산값 4개와 ±0.001%p 안에서 일치한다 (exact 모드)', () => {
     for (const [a, b, ref] of REFERENCE) {
       const v = at(a, b);
-      expect(Math.abs(v - ref), `${a} vs ${b}: ${String(v)} vs ref ${String(ref)}`).toBeLessThan(0.5);
+      expect(Math.abs(v - ref), `${a} vs ${b}: ${String(v)} vs ref ${String(ref)}`).toBeLessThan(0.001);
     }
   });
 
@@ -56,8 +83,32 @@ describe('7.1 equity169.json', () => {
 
   it('7.1 파일의 sha256 이 내용과 맞는다 (커밋된 표가 손상되면 즉시 드러난다)', () => {
     expect(equitySha256(table)).toBe(table.meta.sha256);
-    expect(table.meta.samples).toBeGreaterThanOrEqual(50_000);
   });
+
+  it('10.0 메타가 전수 모드를 주장한다 (mode exact · samples/seedRule 없음)', () => {
+    // MC 흔적이 남아 있으면 표가 무엇으로 만들어졌는지 알 수 없다. loadEquityTable 의
+    // mode↔samples 교차 검사와 짝을 이루는 양성 단언이다.
+    expect(table.meta.mode).toBe('exact');
+    expect(table.meta.samples).toBeNull();
+    expect(table.meta.seedRule).toBeNull();
+  });
+
+  it(
+    '10.0 그 주장이 사실이다: AA vs KK 를 궤도 축약 없이 전수로 다시 계산해 1e-6 이내',
+    { timeout: 60_000 },
+    () => {
+      // AA 6콤보 × KK 6콤보 = 36 쌍, 각각 C(48,5) = 1,712,304 런아웃 전수.
+      const { equity, pairs } = bruteForceClassEquity('AA', 'KK');
+      expect(pairs).toBe(36);
+      const fromTable = (table.equity[CLASS_KEYS.indexOf('AA')] as number[])[
+        CLASS_KEYS.indexOf('KK')
+      ] as number;
+      const delta = Math.abs(fromTable - equity);
+      expect(delta, `table ${String(fromTable)} vs brute ${String(equity)}`).toBeLessThan(1e-6);
+      // 파일 반올림(5e-7) 말고는 차이가 없어야 한다 — MC 라면 여기서 1e-3 규모로 벌어진다.
+      expect(delta).toBeLessThanOrEqual(ROUNDING_BOUND + 1e-12);
+    },
+  );
 
   it('7.1 시드 규칙은 쌍에서 결정적이고 쌍마다 다르다', () => {
     expect(pairSeed('AA', 'KK')).toBe(pairSeed('AA', 'KK'));

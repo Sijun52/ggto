@@ -250,6 +250,35 @@ describe('9 차트 뷰어', () => {
     expect(screen.getByTestId('chart-hover-readout').textContent).toBe('hover: AA · 6.00 / 6');
   });
 
+  it('9 (P2 R1 MINOR 3) reach 모드 우측 패널은 포지션별 도달 질량·콤보 수뿐이다', async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByRole('grid')).toBeTruthy();
+    });
+    // strategy 모드에서는 셀을 고르면 액션·EV 패널이 나온다
+    const canvas = screen.getByRole('grid');
+    canvas.getBoundingClientRect = () => new DOMRect(0, 0, 520, 520);
+    fireEvent.click(canvas, { clientX: 5, clientY: 5 }); // AA
+    await waitFor(() => {
+      expect(screen.getByTestId('chart-combo-panel')).toBeTruthy();
+    });
+    expect(screen.queryByTestId('reach-panel')).toBeNull();
+
+    fireEvent.click(screen.getByTestId('mode-reach'));
+    await waitFor(() => {
+      expect(screen.getByTestId('reach-panel')).toBeTruthy();
+    });
+    // 모드가 갈렸다: 액션/EV 패널은 사라지고 포지션 행만 남는다
+    expect(screen.queryByTestId('chart-combo-panel')).toBeNull();
+    for (const pos of CHART.config.positions) {
+      expect(screen.getByTestId(`reach-row-${pos}`)).toBeTruthy();
+    }
+    // 루트에서는 두 포지션 다 1326 콤보 전부가 살아 있다 (아직 아무도 폴드하지 않았다)
+    expect(screen.getByTestId('reach-row-SB').textContent).toContain('1326 / 1326');
+    expect(screen.getByTestId('reach-row-SB').textContent).toContain('SB •'); // 히어로 표시
+    expect(screen.getByTestId('reach-row-BB').textContent).not.toContain('•');
+  });
+
   it('9 URL 의 set/seq 를 마운트할 때 읽는다', async () => {
     window.history.replaceState(null, '', '/charts?set=1&seq=A');
     renderPage();

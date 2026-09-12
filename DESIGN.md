@@ -24,7 +24,7 @@
 | 언어·런타임 | **TypeScript strict + Node 24 (ESM)**, npm workspaces 모노레포 | Rust 툴체인이 이 PC 에 없고(MSVC 링커 부재), P0~P3 연산은 1326 float 배열 조작이라 TS 로 충분하다. P0 벤치: 풀레인지 vs 풀레인지 플랍 exact 188ms, 플랍 22,100 정규화 14ms |
 | 연산 코어 | `packages/core` (`@ggto/core`) — 런타임 의존성 0 | Card/Combo(1326)/HandClass(169)/Range/파서/평가기/에퀴티/보드 동형/액션 문자열/프리플랍 상태 기계. 전부 순수 함수. P0 R2 APPROVED |
 | 서버 | **Hono + `@hono/node-server`**, 포트 7777, `127.0.0.1` 바인드 | 단일 프로세스. SSE 는 `streamSSE` (P4). 정적 파일은 `web/dist` 를 직접 서빙 + SPA 폴백. P1 R2 APPROVED |
-| 저장소 | **`node:sqlite`** (Node 내장, 네이티브 빌드 없음) + `node:zlib` zstd 블롭 | 차트·트레이너 기록은 SQLite (`data/ggto.db`), 솔브 결과는 zstd 블롭 파일. 저장소는 `ChartRepository` 같은 인터페이스 뒤 (교체 가능). ExperimentalWarning 감수 |
+| 저장소 | **`node:sqlite`** (Node 내장, 네이티브 빌드 없음) + `node:zlib` zstd 블롭 | SQLite 파일 **둘**: `data/ggto.db` 는 차트 — `npm run seed`/`--replace` 로 재생성되는 **산출물**이고, `data/trainer.db` 는 시도·SRS 기록 — 지워지면 안 되는 **사용자 데이터**다 (D16). 기록은 차트를 `content_hash` 로만 참조하므로 파일 간 FK 가 없다. 솔브 결과는 zstd 블롭 파일. 저장소는 `ChartRepository` 같은 인터페이스 뒤 (교체 가능). ExperimentalWarning 감수 |
 | 프론트 | **Vite + React 19 + TypeScript + Tailwind v4 + TanStack Query + Zustand**, 169 격자는 Canvas | SSR/SEO 불필요. 빌드 산출물은 서버가 그대로 서빙 (임베드 없음). 라우터 라이브러리 없음 |
 | 솔버 (P4~) | **Rust `postflop-solver`(AGPL-3.0) 를 감싼 별도 프로세스 데몬** `solver/ggto-solver-cli`. Node 가 `child_process` 로 띄우고 stdio JSON-lines RPC | 유일한 Rust 코드. 프로세스 경계 = AGPL 경계 = `Solver` 인터페이스 경계. 솔브 결과(GB)는 데몬 메모리에 상주, Node 는 노드 하나씩만 받는다. 툴체인은 `rustup` GNU 호스트 (P2 기간 스파이크로 증명, `docs/specs/P2.md` 11절) |
 | 프로토콜 | `packages/protocol` — 타입 전용 + 상수 | 서버/웹이 공유. 1326 배열은 P1~P2 는 JSON number[], P5 솔버 노드부터 octet-stream f32 LE |
@@ -293,26 +293,9 @@ pub struct Grade {
 - leech 스팟(3회 이상 blunder)은 별도 큐로 강제 반복
 
 ### 6.4 스키마
-```sql
-CREATE TABLE attempt (
-  id INTEGER PRIMARY KEY,
-  session_id INTEGER,
-  spot_key TEXT NOT NULL,        -- source + line + combo 를 합친 정규 키
-  category TEXT NOT NULL,        -- 'rfi' | 'vs3bet' | 'cbet_flop' | 'turn_barrel' | ...
-  chosen_action TEXT,
-  ev_loss_bb REAL NOT NULL,
-  verdict TEXT NOT NULL,
-  ms_taken INTEGER,
-  created_at INTEGER NOT NULL
-);
-CREATE INDEX idx_attempt_cat ON attempt(category, created_at);
-
-CREATE TABLE srs_state (
-  spot_key TEXT PRIMARY KEY,
-  ease REAL, interval_days REAL, due_at INTEGER,
-  lapses INTEGER DEFAULT 0
-);
-```
+`docs/specs/P3.md` **4절이 이 블록을 대체한다** (`data/trainer.db`, `user_version = 1`).
+여기 있던 초안은 `category` 값이 임의 문자열이었고 `graded_by`/`mixed`/`content_hash` 가 없어
+EV 채점과 빈도 채점을 구분하지 못했다. 구현된 스키마는 P3.md 4절을 정본으로 본다.
 
 ### 6.5 UI
 출제 화면은 **뷰어와 같은 컴포넌트를 쓰되 전략을 가린 상태**로 렌더 → 답하면 그대로 해설 화면으로 전환(같은 화면에서 마스크만 벗김). 별도 화면을 만들지 않는다.
@@ -355,10 +338,10 @@ POST /api/range/equity         {ranges, board}       → 에퀴티/에퀴티 분
 | **P0** | `ggto-core`: Card/Combo/Range/파서/에퀴티/보드동형 + 테스트 | 라이브러리 + 단위테스트 | 중 |
 | **P1** | Hono 서버 뼈대 + Vite/React 뼈대 + `RangeGrid` 컴포넌트 (**완료**, `docs/reviews/P1-round2.md`) | `localhost:7777`에 169 격자가 뜬다 | 소 |
 | **P2** | 프리플랍: 스키마 + 임포터 CLI + 차트 뷰어 | **첫 실사용 가능 기능** | 중 |
-| **P3** | 트레이너 v1 (프리플랍 전용): 출제/채점/리포트 | 매일 쓸 수 있는 앱이 됨 | 중 |
+| **P3** | 트레이너 v1 (프리플랍 전용): 출제/채점/리포트 + **SRS·리크 분석** | 매일 쓸 수 있는 앱이 됨 | 중 |
 | **P4** | `ggto-solver`: postflop-solver 래핑 + 잡큐 + 캐시 + SSE | CLI로 솔브 돌아감 | 대 |
 | **P5** | 포스트플랍 탐색 UI: 액션 트리 + 격자 + 런아웃 히트맵 | | 대 |
-| **P6** | 트레이너 v2: 포스트플랍 스팟 + SRS 가중치 + 리크 분석 | | 중 |
+| **P6** | 트레이너 v2: **포스트플랍 스팟** (SRS·리크 분석은 P3 에서 앞당겼다) | | 중 |
 | **P7+** | 핸드히스토리 임포트 → 자동 리뷰 (선택) | | 대 |
 
 **P2까지 오면 이미 쓸모가 있고, P3까지 오면 매일 켠다.** P4가 가장 큰 벽이니 그 전에 앱이 자립하도록 순서를 잡았다.
