@@ -9,6 +9,7 @@
 import { comboCards, formatCard, handClassCombos, type HandClassIndex } from '@ggto/core';
 import { formatEv, formatPct, type ChartCellModel } from '../lib/chartGrid';
 import type { ChartNodeView } from '../api/charts';
+import { TEXT_BODY, TEXT_DIM, TEXT_STRONG, TEXT_WARN } from '../lib/palette';
 
 export interface ChartComboPanelProps {
   node: ChartNodeView | null;
@@ -22,7 +23,7 @@ export function ChartComboPanel(props: ChartComboPanelProps): React.JSX.Element 
   const { node, cells, selected, resolution, colors } = props;
   if (node === null || cells === null || selected === null) {
     return (
-      <div className="text-sm text-slate-400" data-testid="chart-combo-panel">
+      <div className={`text-sm ${TEXT_DIM}`} data-testid="chart-combo-panel">
         셀을 클릭하면 콤보별 빈도와 EV가 나옵니다.
       </div>
     );
@@ -33,10 +34,10 @@ export function ChartComboPanel(props: ChartComboPanelProps): React.JSX.Element 
 
   return (
     <div data-testid="chart-combo-panel" className="text-sm">
-      <h2 className="mb-1 font-semibold text-slate-200">
+      <h2 className={`mb-1 font-semibold ${TEXT_STRONG}`}>
         {cell.label} ({String(cell.comboCount)} combos)
       </h2>
-      <p className="mb-2 font-mono text-xs text-slate-400" data-testid="chart-panel-reach">
+      <p className={`mb-2 font-mono text-xs ${TEXT_DIM}`} data-testid="chart-panel-reach">
         {cell.inRange
           ? `reach ${formatPct(cell.weightSum / cell.comboCount)} (${cell.weightSum.toFixed(2)} / ${String(cell.comboCount)})`
           : 'not in range (reach 0)'}
@@ -54,7 +55,7 @@ export function ChartComboPanel(props: ChartComboPanelProps): React.JSX.Element 
                 {a}
               </td>
               <td className="py-0.5 text-right">{formatPct(cell.freq[i] as number)}</td>
-              <td className="py-0.5 text-right text-slate-400">
+              <td className={`py-0.5 text-right ${TEXT_DIM}`}>
                 {cell.ev === null ? '—' : formatEv(cell.ev[i] as number)}
               </td>
             </tr>
@@ -63,18 +64,18 @@ export function ChartComboPanel(props: ChartComboPanelProps): React.JSX.Element 
       </table>
 
       {resolution === '169' ? (
-        <p className="mb-2 text-xs text-amber-300/80" data-testid="chart-resolution-note">
+        <p className={`mb-2 text-xs ${TEXT_WARN}`} data-testid="chart-resolution-note">
           169 해상도 차트 — 콤보별 값은 모두 동일합니다.
         </p>
       ) : null}
 
-      <ul className="grid grid-cols-1 gap-x-4 font-mono text-xs text-slate-300">
+      <ul className={`grid grid-cols-1 gap-x-4 font-mono text-xs ${TEXT_BODY}`}>
         {combos.map((c) => {
           const [hi, lo] = comboCards(c);
           const w = node.reach[c] ?? 0;
           return (
-            <li key={c} className="flex justify-between gap-2 tabular-nums">
-              <span className={w > 0 ? 'text-slate-100' : 'text-slate-500'}>
+            <li key={c} className="flex flex-wrap justify-between gap-2 tabular-nums">
+              <span className={w > 0 ? TEXT_STRONG : TEXT_DIM}>
                 {formatCard(hi) + formatCard(lo)}
               </span>
               <span className="flex gap-2">

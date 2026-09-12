@@ -14,6 +14,7 @@ import { ChartNodeView } from '../components/ChartNodeView';
 import type { PositionReach } from '../components/ReachPanel';
 import { actionColors } from '../lib/chartGrid';
 import { urlParam } from '../lib/defaults';
+import { BTN_ACTIVE, BTN_DISABLED, BTN_NEUTRAL, PAGE, TEXT_DIM, TEXT_ERROR, TEXT_LINK, TEXT_STRONG, TEXT_WARN, TOUCH } from '../lib/palette';
 import { usePageTitle } from '../lib/title';
 import { useUiStore } from '../store/ui';
 
@@ -111,17 +112,27 @@ export function ChartsPage(): React.JSX.Element {
   const crumbs = breadcrumbSeqs(seq);
 
   return (
-    <div className="min-h-screen bg-slate-950 p-6 text-slate-100">
-      <div className="mb-3 flex flex-wrap items-center gap-3">
-        <h1 className="text-xl font-semibold">GGTO — Charts</h1>
-        <a className="text-xs text-sky-400 underline" href="/">
-          ← Range
+    <div className={`flex min-h-screen flex-col p-4 md:p-6 ${PAGE}`}>
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <h1 className={`text-base font-semibold md:text-xl ${TEXT_STRONG}`}>Charts</h1>
+        <a
+          className={`flex items-center justify-center rounded px-2 text-sm ${TOUCH} ${TEXT_LINK}`}
+          href="/"
+          aria-label="Range 로"
+        >
+          ←<span className="ml-1 hidden md:inline">Range</span>
         </a>
-        <a className="text-xs text-sky-400 underline" href="/trainer">
-          Trainer →
+        <a
+          className={`flex items-center justify-center rounded px-2 text-sm ${TOUCH} ${TEXT_LINK}`}
+          href="/trainer"
+          aria-label="Trainer 로"
+        >
+          <span className="mr-1 hidden md:inline">Trainer</span>→
         </a>
+      </div>
+      <div className="mb-2 flex flex-wrap items-center gap-2">
         <select
-          className="rounded bg-slate-800 px-2 py-1 text-sm"
+          className={`min-h-11 w-full min-w-0 rounded px-2 text-sm md:w-auto ${BTN_NEUTRAL}`}
           data-testid="chart-set-select"
           value={activeId === null ? '' : String(activeId)}
           onChange={(e) => {
@@ -135,7 +146,7 @@ export function ChartsPage(): React.JSX.Element {
           ))}
         </select>
         {chart.data === undefined ? null : (
-          <span className="font-mono text-xs text-slate-400" data-testid="chart-source">
+          <span className={`min-w-0 truncate font-mono text-xs ${TEXT_DIM}`} data-testid="chart-source">
             {`source: ${chart.data.source.kind} / ${chart.data.source.name}`}
             {chart.data.hasEv ? ' · EV' : ' · no EV (graded_by: frequency)'}
             {` · ${chart.data.resolution}`}
@@ -144,28 +155,28 @@ export function ChartsPage(): React.JSX.Element {
       </div>
 
       {sets.data !== undefined && sets.data.length === 0 ? (
-        <p className="text-sm text-amber-300" data-testid="chart-empty">
+        <p className={`text-sm ${TEXT_WARN}`} data-testid="chart-empty">
           차트가 없습니다. <code className="font-mono">npm run seed</code> 로 시드 차트를 만드세요.
         </p>
       ) : null}
       {sets.error === null || sets.error === undefined ? null : (
-        <p className="text-sm text-red-400" data-testid="chart-error">{`${sets.error.code}: ${sets.error.message}`}</p>
+        <p className={`text-sm ${TEXT_ERROR}`} data-testid="chart-error">{`${sets.error.code}: ${sets.error.message}`}</p>
       )}
       {node.error === null || node.error === undefined ? null : (
-        <p className="text-sm text-red-400" data-testid="node-error">{`${node.error.code}: ${node.error.message}`}</p>
+        <p className={`text-sm ${TEXT_ERROR}`} data-testid="node-error">{`${node.error.code}: ${node.error.message}`}</p>
       )}
 
-      <div className="mb-2 flex items-center gap-2 text-sm" data-testid="position-tabs">
-        <span className="text-slate-400">포지션:</span>
+      <div className="mb-2 flex flex-wrap items-center gap-2 text-sm" data-testid="position-tabs">
+        <span className={TEXT_DIM}>포지션:</span>
         {positions.map((p) => (
           <button
             key={p}
             type="button"
             data-testid={`pos-tab-${p}`}
             aria-pressed={p === tabPos}
-            className={`rounded px-2 py-0.5 ${
-              p === heroPos ? 'bg-slate-700 text-slate-100' : 'bg-slate-900 text-slate-400'
-            } ${p === tabPos ? 'ring-1 ring-sky-400' : ''}`}
+            className={`rounded px-3 ${TOUCH} ${p === heroPos ? BTN_ACTIVE : BTN_NEUTRAL} ${
+              p === tabPos ? 'ring-2 ring-[#38bdf8]' : ''
+            }`}
             onClick={() => {
               setSelectedPos(p);
             }}
@@ -174,22 +185,23 @@ export function ChartsPage(): React.JSX.Element {
             {p === heroPos ? ' •' : ''}
           </button>
         ))}
-        <span className="text-xs text-slate-500">(• = 이 노드에서 행동하는 포지션)</span>
+        {/* 좁은 화면에서는 44px 줄을 하나 더 쓰는 값이 없다 — 같은 설명이 reach 패널에 있다 */}
+        <span className={`hidden text-xs md:inline ${TEXT_DIM}`}>(• = 이 노드에서 행동하는 포지션)</span>
       </div>
 
-      <div className="mb-2 flex items-center gap-1 text-sm" data-testid="breadcrumb">
-        <span className="mr-1 text-slate-400">라인:</span>
+      <div className="mb-2 flex flex-wrap items-center gap-1 text-sm" data-testid="breadcrumb">
+        <span className={`mr-1 ${TEXT_DIM}`}>라인:</span>
         {crumbs.map((s, i) => {
           const label = s === '' ? 'root' : (s.split('-').pop() as string);
           const exists = nodeSeqs.has(s);
           return (
             <span key={s === '' ? 'root' : s} className="flex items-center gap-1">
-              {i === 0 ? null : <span className="text-slate-600">›</span>}
+              {i === 0 ? null : <span className={TEXT_DIM}>›</span>}
               {exists ? (
                 <button
                   type="button"
                   data-testid={`crumb-${s === '' ? 'root' : s}`}
-                  className={`rounded px-1 ${s === seq ? 'text-slate-100' : 'text-sky-400 underline'}`}
+                  className={`rounded px-2 ${TOUCH} ${s === seq ? BTN_ACTIVE : `${BTN_NEUTRAL} underline`}`}
                   onClick={() => {
                     setSeq(s);
                     setSelectedPos(null);
@@ -198,15 +210,15 @@ export function ChartsPage(): React.JSX.Element {
                   {label}
                 </button>
               ) : (
-                <span className="px-1 text-slate-500">{label}</span>
+                <span className={`px-2 ${TEXT_DIM}`}>{label}</span>
               )}
             </span>
           );
         })}
       </div>
 
-      <div className="mb-3 flex items-center gap-2 text-sm" data-testid="next-actions">
-        <span className="text-slate-400">다음:</span>
+      <div className="mb-2 flex flex-wrap items-center gap-2 text-sm" data-testid="next-actions">
+        <span className={TEXT_DIM}>다음:</span>
         {(nodeData?.actions ?? []).map((a) => {
           const child = childSeq(seq, a);
           const exists = nodeSeqs.has(child);
@@ -217,14 +229,14 @@ export function ChartsPage(): React.JSX.Element {
               data-testid={`action-${a}`}
               disabled={!exists}
               title={exists ? `go to ${child}` : '이 액션 다음은 터미널이거나 차트에 없습니다'}
-              className={`rounded px-2 py-0.5 ${exists ? 'bg-slate-800 text-slate-100' : 'bg-slate-900 text-slate-600'}`}
+              className={`rounded px-3 ${TOUCH} ${exists ? BTN_ACTIVE : BTN_DISABLED}`}
               onClick={() => {
                 setSeq(child);
                 setSelectedPos(null);
               }}
             >
               <span
-                className="mr-1 inline-block h-2 w-2 rounded-sm align-middle"
+                className="mr-1 inline-block h-3 w-3 rounded-sm align-middle"
                 style={{ backgroundColor: colors[a] ?? '#a855f7' }}
               />
               {a}
@@ -232,16 +244,13 @@ export function ChartsPage(): React.JSX.Element {
           );
         })}
         {nodeData === null ? null : (
-          <span className="font-mono text-xs text-slate-500">{`pot ${nodeData.potBb.toFixed(2)}bb`}</span>
+          <span className={`font-mono text-xs ${TEXT_DIM}`}>{`pot ${nodeData.potBb.toFixed(2)}bb`}</span>
         )}
-      </div>
-
-      <div className="mb-2 flex items-center gap-2 text-xs">
         <button
           type="button"
           data-testid="mode-strategy"
           aria-pressed={viewMode === 'strategy'}
-          className={`rounded px-2 py-0.5 ${viewMode === 'strategy' ? 'bg-slate-700' : 'bg-slate-900 text-slate-400'}`}
+          className={`rounded px-3 ${TOUCH} ${viewMode === 'strategy' ? BTN_ACTIVE : BTN_NEUTRAL}`}
           onClick={() => {
             setViewMode('strategy');
           }}
@@ -252,7 +261,7 @@ export function ChartsPage(): React.JSX.Element {
           type="button"
           data-testid="mode-reach"
           aria-pressed={viewMode === 'reach'}
-          className={`rounded px-2 py-0.5 ${viewMode === 'reach' ? 'bg-slate-700' : 'bg-slate-900 text-slate-400'}`}
+          className={`rounded px-3 ${TOUCH} ${viewMode === 'reach' ? BTN_ACTIVE : BTN_NEUTRAL}`}
           onClick={() => {
             setViewMode('reach');
           }}

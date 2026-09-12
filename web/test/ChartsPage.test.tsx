@@ -167,7 +167,7 @@ describe('9 차트 뷰어', () => {
     fireEvent.mouseMove(canvas, { clientX: 5, clientY: 5 }); // AA
     const evAA = (CHART.nodes[0]?.ev['AA'] as number[])[1] as number;
     expect(screen.getByTestId('chart-hover-readout').textContent).toBe(
-      `hover: AA · F 0% +0.00bb · A 100% ${evAA >= 0 ? '+' : ''}${evAA.toFixed(2)}bb`,
+      `선택: AA · F 0% +0.00bb · A 100% ${evAA >= 0 ? '+' : ''}${evAA.toFixed(2)}bb`,
     );
   });
 
@@ -179,6 +179,10 @@ describe('9 차트 뷰어', () => {
     const canvas = screen.getByRole('grid');
     canvas.getBoundingClientRect = () => new DOMRect(0, 0, 520, 520);
     fireEvent.click(canvas, { clientX: 5, clientY: 5 }); // AA
+
+    // 콤보 패널은 접힘이 기본이다 (D20 / P3M 3절) — 헤더를 눌러야 열린다.
+    expect(screen.queryByTestId('chart-combo-panel')).toBeNull();
+    fireEvent.click(screen.getByTestId('combo-toggle'));
 
     expect(screen.getByTestId('chart-combo-panel').textContent).toContain('AA (6 combos)');
     expect(screen.getByTestId('chart-action-A').textContent).toContain('100%');
@@ -247,7 +251,7 @@ describe('9 차트 뷰어', () => {
     const canvas = screen.getByRole('grid');
     canvas.getBoundingClientRect = () => new DOMRect(0, 0, 520, 520);
     fireEvent.mouseMove(canvas, { clientX: 5, clientY: 5 });
-    expect(screen.getByTestId('chart-hover-readout').textContent).toBe('hover: AA · 6.00 / 6');
+    expect(screen.getByTestId('chart-hover-readout').textContent).toBe('선택: AA · 6.00 / 6');
   });
 
   it('9 (P2 R1 MINOR 3) reach 모드 우측 패널은 포지션별 도달 질량·콤보 수뿐이다', async () => {
@@ -259,6 +263,7 @@ describe('9 차트 뷰어', () => {
     const canvas = screen.getByRole('grid');
     canvas.getBoundingClientRect = () => new DOMRect(0, 0, 520, 520);
     fireEvent.click(canvas, { clientX: 5, clientY: 5 }); // AA
+    fireEvent.click(screen.getByTestId('combo-toggle'));
     await waitFor(() => {
       expect(screen.getByTestId('chart-combo-panel')).toBeTruthy();
     });

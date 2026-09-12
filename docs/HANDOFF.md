@@ -8,9 +8,10 @@
 
 | 도구 | 버전 | 필수 여부 |
 |---|---|---|
-| **Node.js** | **24.x** (개발 기준 24.14.0) | 필수 — `node:sqlite` 와 `node:zlib` zstd 를 쓴다. 22 이하는 안 된다 |
+| **Node.js** | **24.x** (개발 기준 24.14.0) | 필수 — `node:sqlite` 와 `node:zlib` zstd 를 쓴다. 22 이하는 안 된다. 루트 `package.json` 의 `engines` + `.npmrc engine-strict=true` 가 **설치를 실패시킨다** (경고로 지나가지 않는다) |
 | npm | 11.x | 필수 |
 | git | 2.x | 필수 |
+| Chrome (또는 Edge) | 임의 | `npm run check:mobile`/`check:desktop` 에만. 경로는 `GGTO_CHROME` |
 | rustup (GNU 호스트) | stable | **P4 부터만.** 그 전에는 없어도 된다 |
 
 Node 24 가 필요한 이유는 내장 SQLite(`node:sqlite`)와 zstd(`node:zlib`) 때문이다. 네이티브 빌드 의존성을 하나도 두지 않으려고 고른 선택이라, 런타임을 낮추면 대체 패키지를 붙여야 한다.
@@ -22,13 +23,18 @@ Node 24 가 필요한 이유는 내장 SQLite(`node:sqlite`)와 zstd(`node:zlib`
 ```bash
 git clone https://github.com/Sijun52/ggto.git
 cd ggto
+node --version  # 24.x 여야 한다
 npm install     # prepare 훅이 core/protocol 을 자동 빌드한다
-npm run seed    # 시드 차트 생성 + 임포트 (최초 1회, 수 초)
+npm run seed    # 시드 차트 생성 + 임포트 (최초 1회, ~6초)
 npm run ci      # 전부 통과하면 환경이 정상이다
-npm start       # http://localhost:7777
+npm run build && npm start   # http://localhost:7777
 ```
 
 `npm run ci` 가 exit 0 이면 끝이다. 실패하면 아래 3절을 보라.
+
+휴대폰에서 쓸 거면 `npm start` 대신 **`npm run start:lan`** — `GGTO_HOST=0.0.0.0` 으로 열고 접속 주소를 찍는다. **인증이 없으므로 신뢰하는 LAN 에서만** (D19). 환경변수 표는 [README](../README.md#환경변수).
+
+레이아웃 검사는 `ci` 밖이다 (Chrome 의존): `npm run check:mobile`, `npm run check:desktop`. 다른 PC 에서는 `GGTO_CHROME` 에 chrome.exe 경로만 주면 된다.
 
 ---
 
@@ -68,7 +74,7 @@ npm start       # http://localhost:7777
 
 작업을 이어받기 전에 이 순서로 읽어라.
 
-1. **[`docs/DECISIONS.md`](DECISIONS.md)** — 되돌리면 안 되는 결정 17건과 각각의 근거. 새 페이즈에서 같은 논쟁을 반복하지 않으려고 만든 문서다. **가장 먼저 읽어라.**
+1. **[`docs/DECISIONS.md`](DECISIONS.md)** — 되돌리면 안 되는 결정 20건과 각각의 근거. 새 페이즈에서 같은 논쟁을 반복하지 않으려고 만든 문서다. **가장 먼저 읽어라.**
 2. **[`docs/specs/P*.md`](specs/)** — 페이즈별 정본 스펙. `DESIGN.md` 와 충돌하면 스펙이 이긴다.
 3. **[`docs/reviews/`](reviews/)** — 판정 이력. 왜 그렇게 결정됐는지가 여기 있다. 각 리뷰의 "이월 MINOR" 목록이 다음 페이즈의 작업 항목이다.
 4. **[`DESIGN.md`](../DESIGN.md)** — 전체 그림. 1~2절은 P1 시점에 재작성됐고, 4.1 스키마는 `specs/P2.md` 가 대체한다.

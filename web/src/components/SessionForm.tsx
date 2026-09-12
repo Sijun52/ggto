@@ -1,11 +1,15 @@
 /**
- * 세션 시작 폼 (P3.md 8.2). 카테고리는 **풀에 실제로 있는 것만** 보여준다 —
+ * 세션 시작 폼 (P3.md 8.2 / P3M 6.5). 카테고리는 **풀에 실제로 있는 것만** 보여준다 —
  * 고를 수 있는데 항상 `EmptyPool` 400 이 나는 선택지를 두지 않는다.
+ *
+ * 체크박스(13px) 대신 **전폭 토글 행**이다: 손가락으로 13px 사각형을 맞출 수 없다.
+ * 행 전체가 `label` 이라 어디를 눌러도 토글된다 (P3M 4절, 44px).
  */
 
 import { useState } from 'react';
 import type { Category, ChartSetDto } from '@ggto/protocol';
 import { CATEGORY_LABEL } from '../api/trainer';
+import { BTN_DISABLED, BTN_PRIMARY, SURFACE, TEXT_BODY, TEXT_DIM, TEXT_ERROR, TEXT_STRONG, TEXT_WARN } from '../lib/palette';
 
 export interface SessionFormProps {
   sets: readonly ChartSetDto[];
@@ -17,6 +21,35 @@ export interface SessionFormProps {
 
 const DEFAULT_COUNT = 20;
 
+function ToggleRow(props: {
+  testId: string;
+  checked: boolean;
+  label: string;
+  onToggle: () => void;
+}): React.JSX.Element {
+  return (
+    <label
+      className={`flex min-h-11 w-full cursor-pointer items-center gap-3 rounded px-3 py-2 text-sm ${SURFACE} ${
+        props.checked ? TEXT_STRONG : TEXT_DIM
+      }`}
+      style={{ touchAction: 'manipulation' }}
+    >
+      {/* 44×44 히트 영역 (P3M 4절). 13px 네이티브 체크박스는 손가락으로 못 맞춘다. */}
+      <input
+        type="checkbox"
+        data-testid={props.testId}
+        checked={props.checked}
+        onChange={props.onToggle}
+        className="h-11 w-11 shrink-0 appearance-none rounded-lg bg-[#334155] bg-clip-content p-3 checked:bg-[#34d399] md:h-6 md:w-6 md:p-1"
+      />
+      <span className="min-w-0 flex-1 truncate">{props.label}</span>
+      <span aria-hidden className="shrink-0">
+        {props.checked ? '✓' : ''}
+      </span>
+    </label>
+  );
+}
+
 export function SessionForm(props: SessionFormProps): React.JSX.Element {
   const [count, setCount] = useState(DEFAULT_COUNT);
   // 기본은 전부 선택. 사용자가 체크를 풀면 그 목록이 필터가 된다.
@@ -25,73 +58,70 @@ export function SessionForm(props: SessionFormProps): React.JSX.Element {
 
   const chosenSets = props.sets.filter((s) => !excludedSets.has(s.id)).map((s) => s.id);
   const chosenCats = props.categories.filter((c) => !excludedCats.has(c));
+  const disabled = props.pending || chosenSets.length === 0 || chosenCats.length === 0;
 
   return (
-    <div data-testid="session-form" className="max-w-2xl text-sm">
-      <h2 className="mb-2 font-semibold text-slate-200">세션 시작</h2>
+    <div data-testid="session-form" className={`w-full max-w-2xl text-sm ${TEXT_BODY}`}>
+      <h2 className={`mb-2 font-semibold ${TEXT_STRONG}`}>세션 시작</h2>
 
-      <label className="mb-3 flex items-center gap-2">
-        <span className="text-slate-400">문제 수</span>
+      <label className="mb-3 flex min-h-11 items-center gap-3">
+        <span className={TEXT_DIM}>문제 수</span>
         <input
           data-testid="session-count"
           type="number"
+          inputMode="numeric"
           min={1}
           max={500}
           value={count}
           onChange={(e) => {
             setCount(Number(e.target.value));
           }}
-          className="w-20 rounded bg-slate-800 px-2 py-1 font-mono"
+          className={`min-h-11 w-24 rounded px-3 font-mono ${SURFACE} ${TEXT_STRONG}`}
         />
       </label>
 
       <fieldset className="mb-3">
-        <legend className="mb-1 text-slate-400">차트셋</legend>
+        <legend className={`mb-1 ${TEXT_DIM}`}>차트셋</legend>
         {props.sets.length === 0 ? (
-          <p className="text-amber-300" data-testid="session-no-sets">
+          <p className={TEXT_WARN} data-testid="session-no-sets">
             차트가 없습니다. <code className="font-mono">npm run seed</code> 로 시드 차트를 만드세요.
           </p>
         ) : (
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-col gap-2">
             {props.sets.map((s) => (
-              <label key={s.id} className="flex items-center gap-1 text-xs">
-                <input
-                  type="checkbox"
-                  data-testid={`session-set-${String(s.id)}`}
-                  checked={!excludedSets.has(s.id)}
-                  onChange={() => {
-                    setExcludedSets(toggle(excludedSets, s.id));
-                  }}
-                />
-                {s.name}
-                {s.hasEv ? '' : ' (빈도 채점)'}
-              </label>
+              <ToggleRow
+                key={s.id}
+                testId={`session-set-${String(s.id)}`}
+                checked={!excludedSets.has(s.id)}
+                label={`${s.name}${s.hasEv ? '' : ' (빈도 채점)'}`}
+                onToggle={() => {
+                  setExcludedSets(toggle(excludedSets, s.id));
+                }}
+              />
             ))}
           </div>
         )}
       </fieldset>
 
       <fieldset className="mb-3">
-        <legend className="mb-1 text-slate-400">카테고리</legend>
-        <div className="flex flex-wrap gap-3">
+        <legend className={`mb-1 ${TEXT_DIM}`}>카테고리</legend>
+        <div className="flex flex-col gap-2">
           {props.categories.map((c) => (
-            <label key={c} className="flex items-center gap-1 text-xs">
-              <input
-                type="checkbox"
-                data-testid={`session-cat-${c}`}
-                checked={!excludedCats.has(c)}
-                onChange={() => {
-                  setExcludedCats(toggle(excludedCats, c));
-                }}
-              />
-              {CATEGORY_LABEL[c]}
-            </label>
+            <ToggleRow
+              key={c}
+              testId={`session-cat-${c}`}
+              checked={!excludedCats.has(c)}
+              label={CATEGORY_LABEL[c]}
+              onToggle={() => {
+                setExcludedCats(toggle(excludedCats, c));
+              }}
+            />
           ))}
         </div>
       </fieldset>
 
       {props.error === null ? null : (
-        <p className="mb-2 text-red-400" data-testid="session-error">
+        <p className={`mb-2 ${TEXT_ERROR}`} data-testid="session-error">
           {props.error}
         </p>
       )}
@@ -99,8 +129,9 @@ export function SessionForm(props: SessionFormProps): React.JSX.Element {
       <button
         type="button"
         data-testid="session-start"
-        disabled={props.pending || chosenSets.length === 0 || chosenCats.length === 0}
-        className="rounded bg-emerald-600 px-3 py-1 font-semibold text-emerald-50 disabled:bg-slate-700 disabled:text-slate-400"
+        disabled={disabled}
+        className={`min-h-12 w-full rounded px-3 text-base font-semibold ${disabled ? BTN_DISABLED : BTN_PRIMARY}`}
+        style={{ touchAction: 'manipulation' }}
         onClick={() => {
           props.onStart({ count, sets: chosenSets, categories: chosenCats });
         }}

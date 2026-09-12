@@ -13,21 +13,21 @@
 | **P0** | `@ggto/core` — 카드/콤보(1326)/레인지/파서/핸드 평가기/에퀴티/보드 동형/액션 시퀀스/프리플랍 상태 기계 | ✅ 승인 |
 | **P1** | Hono 서버 + `RangeGrid` (Canvas 169 격자) | ✅ 승인 |
 | **P2** | 프리플랍 차트 — SQLite 스키마, `ggto-json` v1, 임포터 CLI, 시드 생성기, 차트 뷰어 | ✅ 승인 |
-| **P3** | 트레이너 — 스팟 출제, EV loss 채점, SRS, 세션 리포트 | 🔍 검증 중 |
-| **P3M** | 모바일 UX — 터치 인터랙션, 반응형 격자 | 📋 스펙 작성 중 |
+| **P3** | 트레이너 — 스팟 출제, EV loss 채점, SRS, 세션 리포트 | ✅ 승인 |
+| **P3M** | 모바일 UX — 반응형 격자, 터치 타겟 44px, 하단 액션 바, LAN 접속 | 🔍 검증 중 |
 | **P4** | 포스트플랍 솔버 — Rust `postflop-solver` 데몬 + 잡 큐 + 캐시 | ⏳ 스파이크 완료 |
 | **P5** | 포스트플랍 탐색 UI — 액션 트리, 런아웃 히트맵 | ⏳ |
 | **P6** | 트레이너 v2 — 포스트플랍 스팟, 리크 분석 | ⏳ |
 
-테스트 **437개** 통과 · 타입체크 strict · 런타임 의존성은 core 에 0개.
+테스트 **480개** 통과 · 타입체크 strict · 런타임 의존성은 core 에 0개.
 
 ---
 
 ## 빠른 시작
 
 ```bash
-npm install        # prepare 훅이 core/protocol 을 먼저 빌드한다
-npm run seed       # 시드 차트 6개 생성 → data/ggto.db 임포트 (최초 1회)
+npm install        # prepare 훅이 core/protocol 을 먼저 빌드한다 (Node 24 필요)
+npm run seed       # 시드 차트 6개 생성 → data/ggto.db 임포트 (최초 1회, ~6초)
 npm run build
 npm start          # http://localhost:7777
 ```
@@ -35,9 +35,33 @@ npm start          # http://localhost:7777
 `data/` 는 gitignore 대상이라 클론 직후에는 비어 있다. `npm run seed` 가 CFR+ 로 차트를 다시 풀어서 채운다 — 결정적이라 어느 머신에서 돌려도 `content_hash` 가 같다.
 
 ```bash
-npm run ci           # typecheck → test → build → bench → smoke
-npm run bench:strict # 성능 예산 강제 (유휴 머신에서만 의미 있음)
+npm run ci            # typecheck → test → build → bench → smoke
+npm run bench:strict  # 성능 예산 강제 (유휴 머신에서만 의미 있음)
+npm run check:mobile  # 375x812 실제 레이아웃 검사 + 스크린샷 (Chrome 필요, ci 밖)
+npm run check:desktop # 1280x720 / 1500x1000 회귀 게이트
 ```
+
+### 휴대폰에서 쓰기
+
+앱은 **모바일 우선**이다 (375px 한 열 스택, 답 버튼은 엄지가 닿는 하단 고정 바). 같은 Wi‑Fi 의 휴대폰에서 PC 의 서버에 붙으려면:
+
+```bash
+npm run start:lan   # GGTO_HOST=0.0.0.0 으로 바인드하고 접속 주소를 찍는다
+```
+
+> ⚠️ **이 서버에는 인증이 없다.** `start:lan` 은 같은 네트워크의 **모든 기기**에 트레이너 기록 읽기/쓰기를 연다. 신뢰하는 홈 네트워크에서만 쓰고, 카페·회사 Wi‑Fi 에서는 쓰지 마라. 기본 `npm start` 는 `127.0.0.1` 에만 바인드한다 (D19).
+
+기동하면 `[ggto] 휴대폰에서: http://192.168.x.x:7777` 같은 줄이 나온다. 그 주소를 휴대폰 브라우저에 치면 된다. Windows 방화벽이 처음 한 번 물어보면 "개인 네트워크" 만 허용하라.
+
+### 환경변수
+
+| 변수 | 기본값 | 뜻 |
+|---|---|---|
+| `PORT` | `7777` | 서버 포트 |
+| `GGTO_HOST` | `127.0.0.1` | 바인드 주소. 루프백이 아니면 기동 로그에 경고와 LAN URL 이 찍힌다 (D19) |
+| `GGTO_DATA_DIR` | `<repo>/data` | `ggto.db`·`trainer.db`·`charts/` 가 있는 곳 |
+| `WEB_DIST` | `<repo>/web/dist` | 서빙할 프론트 빌드 |
+| `GGTO_CHROME` | Windows 표준 경로 탐색 | `check:mobile`/`check:desktop` 이 띄울 Chrome |
 
 ---
 
@@ -104,6 +128,8 @@ packages/trainer    @ggto/trainer    스팟·채점·SRS
 web/                @ggto/web        Vite + React 19 + Tailwind v4
 tools/chart-gen     시드 차트 생성기 (CFR+)
 tools/chart-import  ggto-json → SQLite
+tools/shots         headless Chrome 레이아웃 검사 + 스크린샷 (ci 밖)
+scripts/            start-lan 등 운영 스크립트
 docs/specs/         페이즈별 정본 스펙
 docs/reviews/       검수 판정 이력
 docs/DECISIONS.md   되돌리면 안 되는 결정과 근거

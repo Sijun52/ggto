@@ -1,1 +1,27 @@
 @import 'tailwindcss';
+
+/*
+ * P3M 3절: 어떤 요소도 뷰포트 폭을 넘으면 안 된다. 넘는 순간 모바일 브라우저가 layout
+ * viewport 를 넓혀(375 -> 562) 페이지 전체를 0.67배로 축소한다. 게이트는 CSS 가 아니라
+ * `check:mobile` 의 `scrollWidth === innerWidth` 단언이다.
+ *
+ * `overflow-x: hidden` 은 쓰지 않는다 — html/body 에 걸면 스크롤 컨테이너가 생겨
+ * 하단 고정 바의 `position: sticky` 가 죽는다 (실측: verdict 가 y=819 로 화면 밖).
+ * `clip` 은 스크롤 컨테이너를 만들지 않으므로 안전망으로만 남긴다.
+ */
+html,
+body {
+  max-width: 100%;
+  overflow-x: clip;
+  background-color: #020617;
+}
+
+/* 300ms 더블탭 지연 제거 (P3M 4절). */
+button,
+a,
+label,
+input,
+select,
+canvas {
+  touch-action: manipulation;
+}

@@ -6,6 +6,7 @@
  */
 
 import { formatPct } from '../lib/chartGrid';
+import { TEXT_DIM, TEXT_STRONG } from '../lib/palette';
 
 export interface PositionReach {
   pos: string;
@@ -24,13 +25,13 @@ const TOTAL_COMBOS = 1326;
 export function ReachPanel(props: { positions: readonly PositionReach[] }): React.JSX.Element {
   return (
     <div data-testid="reach-panel" className="text-sm">
-      <h2 className="mb-1 font-semibold text-slate-200">도달 레인지</h2>
-      <p className="mb-2 text-xs text-slate-400">
+      <h2 className={`mb-1 font-semibold ${TEXT_STRONG}`}>도달 레인지</h2>
+      <p className={`mb-2 text-xs ${TEXT_DIM}`}>
         이 라인까지 살아남은 레인지의 크기입니다. 액션·EV 는 strategy 모드에 있습니다.
       </p>
       <table className="w-full font-mono text-xs tabular-nums">
         <thead>
-          <tr className="text-slate-500">
+          <tr className={TEXT_DIM}>
             <th className="text-left font-normal">pos</th>
             <th className="text-right font-normal">mass</th>
             <th className="text-right font-normal">combos</th>
@@ -38,7 +39,7 @@ export function ReachPanel(props: { positions: readonly PositionReach[] }): Reac
         </thead>
         <tbody>
           {props.positions.map((p) => (
-            <tr key={p.pos} data-testid={`reach-row-${p.pos}`} className={p.active ? 'text-slate-100' : 'text-slate-400'}>
+            <tr key={p.pos} data-testid={`reach-row-${p.pos}`} className={p.active ? TEXT_STRONG : TEXT_DIM}>
               <td className="py-0.5">
                 {p.pos}
                 {p.hero ? ' •' : ''}
@@ -53,7 +54,7 @@ export function ReachPanel(props: { positions: readonly PositionReach[] }): Reac
           ))}
         </tbody>
       </table>
-      <p className="mt-2 text-xs text-slate-500">• = 이 노드에서 행동하는 포지션</p>
+      <p className={`mt-2 text-xs ${TEXT_DIM}`}>• = 이 노드에서 행동하는 포지션</p>
     </div>
   );
 }

@@ -19,6 +19,7 @@
     "bench": "npm run bench --workspaces --if-present",
     "bench:strict": "npm run bench --workspaces --if-present -- --strict",
     "start": "node packages/server/dist/main.js",
+    "start:lan": "node scripts/start-lan.mjs",
     "smoke": "node packages/server/scripts/smoke.mjs",
     "preseed": "npm run build:libs && npm run build:tools",
     "seed": "node tools/chart-gen/dist/main.js --out data/charts && node tools/chart-import/dist/main.js --db data/ggto.db data/charts",
@@ -28,6 +29,11 @@
     "dev:server": "npm run dev -w @ggto/server",
     "predev:web": "npm run build:libs",
     "dev:web": "npm run dev -w @ggto/web",
-    "ci": "npm run typecheck && npm run test && npm run build && npm run bench && npm run smoke"
+    "ci": "npm run typecheck && npm run test && npm run build && npm run bench && npm run smoke",
+    "check:mobile": "node tools/shots/mobile.mjs",
+    "check:desktop": "node tools/shots/desktop.mjs"
+  },
+  "engines": {
+    "node": ">=24"
   }
 }

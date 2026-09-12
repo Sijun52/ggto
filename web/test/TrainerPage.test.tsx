@@ -534,7 +534,7 @@ describe('P3 8.1 뷰어와 트레이너가 같은 컴포넌트를 쓴다 (DESIGN
         hoveredClass={null}
         onSelectClass={() => undefined}
         onHoverClass={() => undefined}
-        hidePanel
+        panel="none"
       />,
     );
     expect(ctx.fillRect).toBe(HAND_CLASS_COUNT); // 배경만, 레이어 0

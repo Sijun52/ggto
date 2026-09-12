@@ -224,7 +224,7 @@ describe('4.4 RangePage 상태 (store 가 읽히는지)', () => {
     await waitFor(() => {
       expect(screen.getByTestId('range-summary').textContent).toContain('combos: 1');
     });
-    expect(screen.getByTestId('hover-readout').textContent).toBe('hover: —');
+    expect(screen.getByTestId('hover-readout').textContent).toBe('선택: —');
 
     const canvas = screen.getByRole('grid');
     canvas.getBoundingClientRect = () => new DOMRect(0, 0, 520, 520);
@@ -233,11 +233,11 @@ describe('4.4 RangePage 상태 (store 가 읽히는지)', () => {
 
     expect(useUiStore.getState().hoveredClass).toBe(2 * 13 + 2);
     // 분모는 클래스 크기 6 (활성 콤보 1 이 아니다 — R1 MAJOR 2)
-    expect(screen.getByTestId('hover-readout').textContent).toBe('hover: QQ · 0.50 / 6');
+    expect(screen.getByTestId('hover-readout').textContent).toBe('선택: QQ · 0.50 / 6');
 
     fireEvent.mouseLeave(canvas);
     expect(useUiStore.getState().hoveredClass).toBeNull();
-    expect(screen.getByTestId('hover-readout').textContent).toBe('hover: —');
+    expect(screen.getByTestId('hover-readout').textContent).toBe('선택: —');
   });
 });
 

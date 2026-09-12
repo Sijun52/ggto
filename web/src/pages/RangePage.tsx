@@ -6,10 +6,11 @@ import { ComboPanel } from '../components/ComboPanel';
 import { RangeGrid } from '../components/RangeGrid';
 import { RangeInput } from '../components/RangeInput';
 import { buildCells, formatCellSummary } from '../lib/grid';
+import { gridMaxFor, gridSizeFor, useContainerWidth, useHoverCapable, useMediaQuery } from '../lib/layout';
 import { rangeTextFromUrl } from '../lib/defaults';
+import { PAGE, TEXT_BODY, TEXT_DIM, TEXT_ERROR, TEXT_STRONG } from '../lib/palette';
 import { usePageTitle } from '../lib/title';
 import { useUiStore } from '../store/ui';
-
 
 export function RangePage(): React.JSX.Element {
   usePageTitle('GGTO — Range');
@@ -26,6 +27,15 @@ export function RangePage(): React.JSX.Element {
   const setSelectedClass = useUiStore((s) => s.setSelectedClass);
   const hoveredClass = useUiStore((s) => s.hoveredClass);
   const setHoveredClass = useUiStore((s) => s.setHoveredClass);
+
+  const [gridRef, containerWidth] = useContainerWidth<HTMLDivElement>();
+  const isXl = useMediaQuery('(min-width: 1280px)', true);
+  const isMd = useMediaQuery('(min-width: 768px)', true);
+  const hoverCapable = useHoverCapable();
+  const size =
+    containerWidth === null
+      ? undefined
+      : gridSizeFor(containerWidth, gridMaxFor(isXl ? 1280 : isMd ? 768 : 375));
 
   // 입력 상자는 store 가 소유한다 (RangeInput 참조). 첫 페인트 전에 URL 값을 넣어야
   // 빈 입력 상자가 한 프레임 보이지 않으므로 layout effect 다. 의존성이 전부 안정값이라 1회 실행.
@@ -44,7 +54,9 @@ export function RangePage(): React.JSX.Element {
   }, [initialText, mutate]);
 
   const cells = useMemo(() => (parsed === null ? null : buildCells(parsed.weights)), [parsed]);
-  const hoveredCell = cells === null || hoveredClass === null ? null : (cells[hoveredClass] ?? null);
+  // 터치에는 호버가 없다 — 상태줄은 그때 **선택 셀**을 말한다 (P3M 4절).
+  const readoutClass = hoverCapable ? (hoveredClass ?? selectedClass) : selectedClass;
+  const readoutCell = cells === null || readoutClass === null ? null : (cells[readoutClass] ?? null);
 
   const submit = (text: string): void => {
     mutate(text);
@@ -53,47 +65,48 @@ export function RangePage(): React.JSX.Element {
   const error = mutation.error;
 
   return (
-    <div className="min-h-screen bg-slate-950 p-6 text-slate-100">
-      <h1 className="mb-4 text-xl font-semibold">GGTO — Range</h1>
+    <div className={`flex min-h-screen flex-col p-4 md:p-6 ${PAGE}`}>
+      <h1 className={`mb-3 text-base font-semibold md:text-xl ${TEXT_STRONG}`}>GGTO — Range</h1>
 
       <RangeInput pending={mutation.isPending} onSubmit={submit} />
 
       {error === null ? null : (
-        <p className="mt-2 text-sm text-red-400" data-testid="range-error">
+        <p className={`mt-2 text-sm ${TEXT_ERROR}`} data-testid="range-error">
           {`${error.code}: ${error.message}`}
         </p>
       )}
 
-      <p className="mt-3 font-mono text-sm text-slate-300" data-testid="range-summary">
+      <p className={`mt-3 min-w-0 font-mono text-sm break-all ${TEXT_BODY}`} data-testid="range-summary">
         {parsed === null
           ? 'canonical: —   combos: —   weight: —'
           : `canonical: ${parsed.text}   combos: ${String(parsed.comboCount)} / ${String(COMBO_COUNT)}   weight: ${formatWeight(parsed.totalWeight)}`}
       </p>
 
-      <div className="mt-4 flex flex-wrap gap-8">
+      <div ref={gridRef} className="mt-4 flex min-w-0 flex-col gap-4">
         {cells === null ? (
           // 첫 파싱이 실패하면 보여줄 격자가 없다. 영원한 "loading…" 대신 이유를 남긴다
           // (에러 문구는 입력 상자 아래에 이미 떠 있다).
-          <p className="text-sm text-slate-400" data-testid="grid-placeholder">
+          <p className={`text-sm ${TEXT_DIM}`} data-testid="grid-placeholder">
             {error === null ? 'loading…' : 'no range to draw'}
           </p>
         ) : (
-          <div>
+          <div className="min-w-0">
             <RangeGrid
               cells={cells}
+              {...(size === undefined ? {} : { size })}
               selected={selectedClass}
               onSelect={(h: HandClassIndex) => {
                 setSelectedClass(h);
               }}
-              onHover={setHoveredClass}
+              {...(hoverCapable ? { onHover: setHoveredClass } : {})}
             />
-            {/* 호버 상태줄. 마우스가 격자를 벗어나도 자리를 차지해 레이아웃이 흔들리지 않게 한다. */}
-            <p className="mt-2 h-5 font-mono text-xs text-slate-400" data-testid="hover-readout">
-              {hoveredCell === null ? 'hover: —' : `hover: ${formatCellSummary(hoveredCell)}`}
+            {/* 상태줄. 셀을 벗어나도 자리를 차지해 레이아웃이 흔들리지 않게 한다. */}
+            <p className={`mt-2 min-h-5 font-mono text-sm ${TEXT_BODY}`} data-testid="hover-readout">
+              {readoutCell === null ? '선택: —' : `선택: ${formatCellSummary(readoutCell)}`}
             </p>
           </div>
         )}
-        <div className="w-80">
+        <div className="min-w-0">
           <ComboPanel weights={parsed === null ? null : parsed.weights} selected={selectedClass} />
         </div>
       </div>

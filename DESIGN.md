@@ -23,9 +23,9 @@
 |---|---|---|
 | 언어·런타임 | **TypeScript strict + Node 24 (ESM)**, npm workspaces 모노레포 | Rust 툴체인이 이 PC 에 없고(MSVC 링커 부재), P0~P3 연산은 1326 float 배열 조작이라 TS 로 충분하다. P0 벤치: 풀레인지 vs 풀레인지 플랍 exact 188ms, 플랍 22,100 정규화 14ms |
 | 연산 코어 | `packages/core` (`@ggto/core`) — 런타임 의존성 0 | Card/Combo(1326)/HandClass(169)/Range/파서/평가기/에퀴티/보드 동형/액션 문자열/프리플랍 상태 기계. 전부 순수 함수. P0 R2 APPROVED |
-| 서버 | **Hono + `@hono/node-server`**, 포트 7777, `127.0.0.1` 바인드 | 단일 프로세스. SSE 는 `streamSSE` (P4). 정적 파일은 `web/dist` 를 직접 서빙 + SPA 폴백. P1 R2 APPROVED |
+| 서버 | **Hono + `@hono/node-server`**, 포트 7777, `127.0.0.1` 바인드 (`GGTO_HOST` 로 **명시적 opt-in** LAN 바인드, D19) | 단일 프로세스. SSE 는 `streamSSE` (P4). 정적 파일은 `web/dist` 를 직접 서빙 + SPA 폴백. P1 R2 APPROVED |
 | 저장소 | **`node:sqlite`** (Node 내장, 네이티브 빌드 없음) + `node:zlib` zstd 블롭 | SQLite 파일 **둘**: `data/ggto.db` 는 차트 — `npm run seed`/`--replace` 로 재생성되는 **산출물**이고, `data/trainer.db` 는 시도·SRS 기록 — 지워지면 안 되는 **사용자 데이터**다 (D16). 기록은 차트를 `content_hash` 로만 참조하므로 파일 간 FK 가 없다. 솔브 결과는 zstd 블롭 파일. 저장소는 `ChartRepository` 같은 인터페이스 뒤 (교체 가능). ExperimentalWarning 감수 |
-| 프론트 | **Vite + React 19 + TypeScript + Tailwind v4 + TanStack Query + Zustand**, 169 격자는 Canvas | SSR/SEO 불필요. 빌드 산출물은 서버가 그대로 서빙 (임베드 없음). 라우터 라이브러리 없음 |
+| 프론트 | **Vite + React 19 + TypeScript + Tailwind v4 + TanStack Query + Zustand**, 169 격자는 Canvas | SSR/SEO 불필요. 빌드 산출물은 서버가 그대로 서빙 (임베드 없음). 라우터 라이브러리 없음. **모바일 우선 사용** — 375px 한 열 스택, 격자는 뷰포트 폭에 스케일(325px), 터치 타겟 44px, 트레이너 답 버튼은 하단 고정 바, 호버 대신 `선택:` 상태줄 (P3M) |
 | 솔버 (P4~) | **Rust `postflop-solver`(AGPL-3.0) 를 감싼 별도 프로세스 데몬** `solver/ggto-solver-cli`. Node 가 `child_process` 로 띄우고 stdio JSON-lines RPC | 유일한 Rust 코드. 프로세스 경계 = AGPL 경계 = `Solver` 인터페이스 경계. 솔브 결과(GB)는 데몬 메모리에 상주, Node 는 노드 하나씩만 받는다. 툴체인은 `rustup` GNU 호스트 (P2 기간 스파이크로 증명, `docs/specs/P2.md` 11절) |
 | 프로토콜 | `packages/protocol` — 타입 전용 + 상수 | 서버/웹이 공유. 1326 배열은 P1~P2 는 JSON number[], P5 솔버 노드부터 octet-stream f32 LE |
 
@@ -61,7 +61,9 @@ GGTO/
 ├─ web/                       # Vite + React
 ├─ tools/
 │  ├─ chart-import/           # ggto-json → SQLite CLI (P2)
-│  └─ chart-gen/              # 자체 생성 시드 차트 (P2)
+│  ├─ chart-gen/              # 자체 생성 시드 차트 (P2)
+│  └─ shots/                  # headless Chrome 레이아웃 검사·스크린샷 (P3M, ci 밖)
+├─ scripts/                   # start-lan 등 운영 스크립트 (P3M)
 ├─ data/                      # gitignore. DB + 차트 원본 + 솔브 캐시
 ├─ docs/specs/P*.md           # 페이즈별 정본 스펙
 └─ docs/reviews/              # 리뷰 판정
@@ -243,6 +245,7 @@ EV 채점과 빈도 채점을 구분하지 못했다. 구현된 스키마는 P3.
 
 ### 6.5 UI
 출제 화면은 **뷰어와 같은 컴포넌트를 쓰되 전략을 가린 상태**로 렌더 → 답하면 그대로 해설 화면으로 전환(같은 화면에서 마스크만 벗김). 별도 화면을 만들지 않는다.
+출제/해설 화면의 답 버튼은 모바일에서 **하단 고정 바**다 (한 손 엄지 도달 범위, P3M 4절). 데스크톱에서는 같은 컴포넌트가 격자 우측 열에 놓인다 — DOM 은 하나이고 `position` 만 CSS 로 갈린다. 콤보 패널은 접힘이 기본이고 격자 **아래**다 (D20).
 
 ---
 
@@ -283,6 +286,7 @@ POST /api/range/equity         {ranges, board}       → 에퀴티/에퀴티 분
 | **P1** | Hono 서버 뼈대 + Vite/React 뼈대 + `RangeGrid` 컴포넌트 (**완료**, `docs/reviews/P1-round2.md`) | `localhost:7777`에 169 격자가 뜬다 | 소 |
 | **P2** | 프리플랍: 스키마 + 임포터 CLI + 차트 뷰어 | **첫 실사용 가능 기능** | 중 |
 | **P3** | 트레이너 v1 (프리플랍 전용): 출제/채점/리포트 + **SRS·리크 분석** | 매일 쓸 수 있는 앱이 됨 | 중 |
+| **P3M** | 모바일 UX: 반응형 격자 + 터치 타겟 44px + 하단 액션 바 + 리포트 카드 + `GGTO_HOST` LAN opt-in | 휴대폰으로 20문제를 한 손으로 돈다. 완료 조건: `npm run check:mobile` exit 0 | 소 |
 | **P4** | `ggto-solver`: postflop-solver 래핑 + 잡큐 + 캐시 + SSE | CLI로 솔브 돌아감 | 대 |
 | **P5** | 포스트플랍 탐색 UI: 액션 트리 + 격자 + 런아웃 히트맵 | | 대 |
 | **P6** | 트레이너 v2: **포스트플랍 스팟** (SRS·리크 분석은 P3 에서 앞당겼다) | | 중 |
