@@ -32,7 +32,7 @@ npm run build && npm start   # http://localhost:7777
 
 `npm run ci` 가 exit 0 이면 끝이다. 실패하면 아래 3절을 보라.
 
-휴대폰에서 쓸 거면 `npm start` 대신 **`npm run start:lan`** — `GGTO_HOST=0.0.0.0` 으로 열고 접속 주소를 찍는다. **인증이 없으므로 신뢰하는 LAN 에서만** (D19). 환경변수 표는 [README](../README.md#환경변수).
+휴대폰에서 쓸 거면 `npm start` 대신 **`npm run start:lan`** — 이 PC 의 **사설 LAN 주소 하나**에만 바인드하고 접속 주소를 찍는다 (`0.0.0.0` 이 아니다). 사설 주소가 없으면 **기동을 거부**한다: `Get-NetIPAddress`/`Get-NetConnectionProfile` 로 주소가 사설이고 프로필이 Private 인지 먼저 보라. **인증이 없으므로 신뢰하는 LAN 에서만** (D19). 환경변수 표는 [README](../README.md#환경변수).
 
 레이아웃 검사는 `ci` 밖이다 (Chrome 의존): `npm run check:mobile`, `npm run check:desktop`. 다른 PC 에서는 `GGTO_CHROME` 에 chrome.exe 경로만 주면 된다.
 

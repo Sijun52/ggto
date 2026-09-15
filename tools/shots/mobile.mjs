@@ -112,6 +112,18 @@ async function main() {
     );
     await screenshot(cdp, resolve(OUT_DIR, 'P3M-mobile-charts.png'));
 
+    // reach 패널은 `>= md` 에서 격자 오른쪽 열이다 (R1 MAJOR 2). 375 에서는 아래여야 한다.
+    await evaluate(cdp, P.click('mode-reach'));
+    await waitFor(cdp, `document.querySelector('[data-testid="reach-panel"]')`, { label: 'reach 패널' });
+    await commonChecks(cdp, 'charts-reach');
+    const mReachCanvas = await evaluate(cdp, P.CANVAS);
+    const mReachPanel = await evaluate(cdp, P.rectOf('reach-panel'));
+    check(
+      mReachPanel !== null && mReachCanvas !== null && mReachPanel.top >= mReachCanvas.bottom,
+      'charts-reach: 375 에서 reach 패널은 격자 **아래**다 (P3M 6.2)',
+      { panelTop: mReachPanel?.top, canvasBottom: mReachCanvas?.bottom },
+    );
+
     // --- 3. Trainer 세션 폼 ---------------------------------------------
     await goto(cdp, `${server.baseUrl}/trainer`);
     await waitFor(cdp, `document.querySelector('[data-testid="session-form"]')`, { label: '세션 폼' });
@@ -124,6 +136,8 @@ async function main() {
     await gridChecks(cdp, 'trainer-masked');
     const bar = await evaluate(cdp, P.rectOf('action-bar'));
     check(bar !== null && bar.bottom <= H, '출제: 하단 바가 뷰포트 안', bar);
+    // R1 MINOR 3: 짧은 페이지에서 바가 페이지 `p-4` 안에 갇혀 아래 16px 이 남았다.
+    check(bar !== null && bar.bottom === H, '출제: 바가 화면 맨 아래에 붙는다 (R1 MINOR 3)', { bar, H });
     check(bar !== null && bar.top >= H * 0.6, '출제: 하단 바가 엄지 범위(하단 40%)', {
       ...bar,
       threshold: H * 0.6,
@@ -149,6 +163,20 @@ async function main() {
       nextBtn,
     );
     check(nextBtn !== null && nextBtn.h >= 48, '답 후: "다음" 높이 >= 48', nextBtn);
+    // R1 MINOR 1: 답 후 바가 157px 이 되어 격자 아래 액션표의 행을 스크롤 0 에서 덮었다.
+    // 요약줄만 보이고 정작 액션별 빈도/EV 는 가려졌다.
+    const revealedBar = await evaluate(cdp, P.rectOf('action-bar'));
+    const gradeTable = await evaluate(cdp, P.rectOf('grade-table'));
+    check(
+      gradeTable !== null && revealedBar !== null && gradeTable.bottom <= revealedBar.top,
+      '답 후: 액션표가 스크롤 0 에서 하단 바에 가리지 않는다 (R1 MINOR 1)',
+      { gradeTable, bar: revealedBar },
+    );
+    check(
+      revealedBar !== null && revealedBar.bottom >= H,
+      '답 후: 바 아래에 빈 띠가 없다 (R1 MINOR 3)',
+      { bar: revealedBar, H },
+    );
     // 오탭 방지: 공개 직후 "다음" 은 잠겨 있다
     const lockedNow = await evaluate(cdp, `document.querySelector('[data-testid="next-spot"]').disabled`);
     await new Promise((r) => setTimeout(r, 700));

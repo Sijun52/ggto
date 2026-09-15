@@ -112,7 +112,7 @@ export function ChartsPage(): React.JSX.Element {
   const crumbs = breadcrumbSeqs(seq);
 
   return (
-    <div className={`flex min-h-screen flex-col p-4 md:p-6 ${PAGE}`}>
+    <div className={`flex min-h-dvh flex-col p-4 md:p-6 ${PAGE}`}>
       <div className="mb-2 flex flex-wrap items-center gap-2">
         <h1 className={`text-base font-semibold md:text-xl ${TEXT_STRONG}`}>Charts</h1>
         <a

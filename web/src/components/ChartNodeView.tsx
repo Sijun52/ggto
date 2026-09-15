@@ -128,8 +128,14 @@ export function ChartNodeView(props: ChartNodeViewProps): React.JSX.Element {
   const selected = masked ? props.highlightClass : props.selectedClass;
   const selectedCombos = props.selectedClass === null ? 0 : handClassCombos(props.selectedClass).length;
 
+  // reach 패널은 D20(콤보 패널 접힘+아래) 의 대상이 **아니다**: 아래로 내리면 1280x720
+  // 에서 top 813 으로 화면 밖이고 격자 오른쪽 700px 이 빈다 (P3M R1 MAJOR 2).
+  // `< md` 에서만 격자 아래, `>= md` 에서는 격자 오른쪽 열 (P3M 6.2).
+  const reachAside = panel !== 'none' && viewMode === 'reach';
+
   return (
-    <div className="flex min-w-0 flex-col gap-3">
+    <div className={`flex min-w-0 flex-col gap-3 ${reachAside ? 'md:flex-row md:items-start md:gap-6' : ''}`}>
+      <div className={`flex min-w-0 flex-col gap-3 ${reachAside ? 'md:min-w-0 md:flex-1' : ''}`}>
       <div ref={gridRef} className="min-w-0">
         {masked ? null : (
           <div className={`mb-2 flex flex-wrap items-center gap-3 text-sm md:text-xs ${TEXT_BODY}`} data-testid="legend">
@@ -181,11 +187,7 @@ export function ChartNodeView(props: ChartNodeViewProps): React.JSX.Element {
 
       {props.belowGrid ?? null}
 
-      {panel === 'none' ? null : viewMode === 'reach' ? (
-        <div className="min-w-0">
-          <ReachPanel positions={positionReach} />
-        </div>
-      ) : (
+      {panel === 'none' || viewMode === 'reach' ? null : (
         <div className="min-w-0">
           <button
             type="button"
@@ -215,6 +217,13 @@ export function ChartNodeView(props: ChartNodeViewProps): React.JSX.Element {
           ) : null}
         </div>
       )}
+      </div>
+
+      {reachAside ? (
+        <div className="min-w-0 md:w-80 md:shrink-0" data-testid="reach-aside">
+          <ReachPanel positions={positionReach} />
+        </div>
+      ) : null}
     </div>
   );
 }

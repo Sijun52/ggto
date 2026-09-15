@@ -37,13 +37,21 @@ export function AnswerBar(props: AnswerBarProps): React.JSX.Element {
   const revealed = grade !== null;
   const armed = useArmedAfter(grade, NEXT_ARM_MS);
 
+  // `-mb-4` 는 페이지 상자의 `p-4` 세로 패딩을 상쇄한다. 없으면 sticky 가 containing block
+  // 안에 갇혀 바 아래 16px 이 남고, 노치 폰에서 safe-area 와 겹친다 (P3M R1 MINOR 3).
   return (
     <div
       data-testid="action-bar"
-      className="sticky bottom-0 z-20 -mx-4 mt-auto flex flex-col gap-2 border-t border-[#334155] bg-[#020617] px-4 pt-2 md:static md:z-auto md:mx-0 md:mt-0 md:w-80 md:shrink-0 md:border-0 md:px-0 md:pt-0"
+      className="sticky bottom-0 z-20 -mx-4 -mb-4 mt-auto flex flex-col gap-2 border-t border-[#334155] bg-[#020617] px-4 pt-2 md:static md:z-auto md:mx-0 md:mb-0 md:mt-0 md:w-80 md:shrink-0 md:border-0 md:px-0 md:pt-0"
       style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.5rem)' }}
     >
-      <div className="flex gap-2" data-testid="answer-buttons">
+      {/*
+        답 후 `< md` 에서는 답 버튼 줄을 감춘다 (R1 MINOR 1). 남겨 두면 바가 157px 이 되어
+        격자 아래 액션표의 행을 스크롤 0 에서 가린다. 고른 액션은 사라지지 않는다 —
+        `grade-summary` 의 "당신: F (35%)" 와 액션표의 `←` 표시가 같은 것을 말한다.
+        `>= md` 는 우측 열이라 자리가 남으므로 비활성 버튼을 그대로 둔다 (P3 8.2).
+      */}
+      <div className={`flex gap-2 ${revealed ? 'hidden md:flex' : ''}`} data-testid="answer-buttons">
         {actions.map((a, i) => {
           const color = colors[a] ?? '#a855f7';
           const chosen = grade?.chosenAction === a;

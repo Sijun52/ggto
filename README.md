@@ -43,22 +43,38 @@ npm run check:desktop # 1280x720 / 1500x1000 회귀 게이트
 
 ### 휴대폰에서 쓰기
 
-앱은 **모바일 우선**이다 (375px 한 열 스택, 답 버튼은 엄지가 닿는 하단 고정 바). 같은 Wi‑Fi 의 휴대폰에서 PC 의 서버에 붙으려면:
+앱은 **모바일 우선**이다 (375px 한 열 스택, 답 버튼은 엄지가 닿는 하단 고정 바). 휴대폰에서 PC 의 서버에 붙으려면:
 
 ```bash
-npm run start:lan   # GGTO_HOST=0.0.0.0 으로 바인드하고 접속 주소를 찍는다
+npm run build && npm run start:lan
 ```
 
-> ⚠️ **이 서버에는 인증이 없다.** `start:lan` 은 같은 네트워크의 **모든 기기**에 트레이너 기록 읽기/쓰기를 연다. 신뢰하는 홈 네트워크에서만 쓰고, 카페·회사 Wi‑Fi 에서는 쓰지 마라. 기본 `npm start` 는 `127.0.0.1` 에만 바인드한다 (D19).
+`start:lan` 은 **이 PC 의 사설 LAN 주소 하나에만** 바인드한다 (`0.0.0.0` 이 아니다). 사설 = RFC1918 `10/8` · `172.16/12` · `192.168/16`, IPv6 ULA `fc00::/7`, 그리고 Tailscale 류 오버레이 `100.64/10`. 기동하면 `[ggto] 휴대폰에서: http://192.168.x.x:7777` 이 찍힌다 — 그 주소를 휴대폰 브라우저에 치면 된다.
 
-기동하면 `[ggto] 휴대폰에서: http://192.168.x.x:7777` 같은 줄이 나온다. 그 주소를 휴대폰 브라우저에 치면 된다. Windows 방화벽이 처음 한 번 물어보면 "개인 네트워크" 만 허용하라.
+> ⚠️ **이 서버에는 인증이 없다.** LAN 에 열면 그 네트워크의 **모든 기기**가 트레이너 기록을 읽고 쓸 수 있다. 신뢰하는 홈 네트워크에서만 쓰라. 기본 `npm start` 는 `127.0.0.1` 에만 바인드한다 (D19).
+
+**"같은 Wi‑Fi" 라고 다 사설 대역인 것은 아니다.** 이 레포를 만든 PC 는 유일한 IPv4 가 공인 `61.82.129.232/26` 이었다 — NAT 공유기 뒤가 아니라 인터넷에 직접 붙어 있었고, 거기서 `0.0.0.0` 바인드는 LAN 개방이 아니라 **인터넷 개방**이었다. 그래서 대역 판정은 코드가 한다:
+
+- 사설 주소가 하나도 없으면 `start:lan` 은 **기동을 거부**하고 발견된 주소·대역을 찍는다.
+- `GGTO_HOST` 에 공인 IP 나 `0.0.0.0`(공인 IP 가 붙어 있을 때) 을 줘도 서버가 **거부**한다.
+- 그래도 열려면 `GGTO_ALLOW_PUBLIC=1` 을 따로 줘야 하고, 그때는 노출 주소를 경고로 찍는다. **권장하지 않는다.**
+
+먼저 확인할 것 (Windows PowerShell):
+
+```powershell
+Get-NetIPAddress -AddressFamily IPv4 | Select-Object IPAddress, InterfaceAlias
+Get-NetConnectionProfile | Select-Object InterfaceAlias, NetworkCategory
+```
+
+주소가 `192.168.*` / `10.*` / `172.16~31.*` 이고 `NetworkCategory` 가 **Private** 이면 `start:lan` 을 써도 된다. 공인 주소뿐이거나 카테고리가 **Public** 이면 쓰지 마라 — 방화벽에서 Public 프로필을 허용하는 순간 인터넷에 열린다. 그런 회선에서 휴대폰을 붙이려면 NAT 공유기를 두거나 Tailscale 류 오버레이(`100.64/10`) 를 쓰라.
 
 ### 환경변수
 
 | 변수 | 기본값 | 뜻 |
 |---|---|---|
 | `PORT` | `7777` | 서버 포트 |
-| `GGTO_HOST` | `127.0.0.1` | 바인드 주소. 루프백이 아니면 기동 로그에 경고와 LAN URL 이 찍힌다 (D19) |
+| `GGTO_HOST` | `127.0.0.1` | 바인드 주소. 공인 IP(또는 공인 IP 가 있는 PC 의 `0.0.0.0`) 는 거부한다 (D19) |
+| `GGTO_ALLOW_PUBLIC` | (없음) | `1` 이면 공인 IP 바인드 거부를 푼다. **인증 없는 서버가 인터넷에 열린다** |
 | `GGTO_DATA_DIR` | `<repo>/data` | `ggto.db`·`trainer.db`·`charts/` 가 있는 곳 |
 | `WEB_DIST` | `<repo>/web/dist` | 서빙할 프론트 빌드 |
 | `GGTO_CHROME` | Windows 표준 경로 탐색 | `check:mobile`/`check:desktop` 이 띄울 Chrome |

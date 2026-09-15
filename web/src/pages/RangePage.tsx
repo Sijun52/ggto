@@ -65,7 +65,7 @@ export function RangePage(): React.JSX.Element {
   const error = mutation.error;
 
   return (
-    <div className={`flex min-h-screen flex-col p-4 md:p-6 ${PAGE}`}>
+    <div className={`flex min-h-dvh flex-col p-4 md:p-6 ${PAGE}`}>
       <h1 className={`mb-3 text-base font-semibold md:text-xl ${TEXT_STRONG}`}>GGTO — Range</h1>
 
       <RangeInput pending={mutation.isPending} onSubmit={submit} />

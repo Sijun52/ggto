@@ -14,7 +14,15 @@ export const CANVAS = `(() => {
   const c = document.querySelector('canvas[role="grid"]');
   if (c === null) return null;
   const r = c.getBoundingClientRect();
-  return { cssWidth: Math.round(r.width), cssHeight: Math.round(r.height), attrWidth: c.width, top: r.top };
+  return {
+    cssWidth: Math.round(r.width),
+    cssHeight: Math.round(r.height),
+    attrWidth: c.width,
+    top: Math.round(r.top),
+    left: Math.round(r.left),
+    right: Math.round(r.right),
+    bottom: Math.round(r.bottom),
+  };
 })()`;
 
 export const AXIS_FONT = `(() => {

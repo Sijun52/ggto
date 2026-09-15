@@ -111,13 +111,29 @@ async function main() {
         { panelTop: panel?.top, canvasBottom: (viewerCanvas?.top ?? 0) + (viewerCanvas?.cssHeight ?? 0) },
       );
 
-      // reach 모드 패널은 그대로 동작한다 (P2 R1 MINOR 3)
+      // reach 모드 패널은 그대로 동작한다 (P2 R1 MINOR 3) **그리고 보인다** (R1 MAJOR 2).
+      // 행 수만 세던 옛 검사는 렌더 여부만 봤다 — 패널이 격자 아래로 내려가 1280x720 에서
+      // top 813 (화면 밖) 이 된 회귀를 통째로 놓쳤다 (P3M 8.3-3 R1 개정).
       await evaluate(cdp, P.click('mode-reach'));
       await waitFor(cdp, `document.querySelector('[data-testid="reach-panel"]')`, { label: 'reach 패널' });
+      await evaluate(cdp, 'window.scrollTo(0, 0)');
       check(
         (await evaluate(cdp, `document.querySelectorAll('[data-testid^="reach-row-"]').length`)) >= 2,
         `${tag} reach 패널에 포지션 행이 있다`,
       );
+      const reachCanvas = await evaluate(cdp, P.CANVAS);
+      const reachPanel = await evaluate(cdp, P.rectOf('reach-panel'));
+      check(
+        reachPanel !== null && reachPanel.top >= 0 && reachPanel.bottom <= h,
+        `${tag} reach 패널이 스크롤 0 에서 뷰포트 안 (R1 MAJOR 2)`,
+        { reachPanel, h },
+      );
+      check(
+        reachPanel !== null && reachCanvas !== null && reachPanel.left > reachCanvas.left + reachCanvas.cssWidth,
+        `${tag} reach 패널이 격자 **오른쪽 열**에 있다`,
+        { panelLeft: reachPanel?.left, canvasRight: (reachCanvas?.left ?? 0) + (reachCanvas?.cssWidth ?? 0) },
+      );
+      check(reachCanvas !== null && reachCanvas.cssWidth === 520, `${tag} reach 모드 캔버스도 520px`, reachCanvas);
       await screenshot(cdp, resolve(OUT_DIR, `P3M-desktop-${tag}-charts-reach.png`));
     }
   } finally {

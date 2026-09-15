@@ -29,7 +29,7 @@ import { useUiStore } from '../store/ui';
 const REPORT_DAYS = 30;
 
 /** 페이지 바깥 상자. 모바일은 한 열 스택이고 하단 바가 뷰포트에 붙는다 */
-const PAGE_BOX = `flex min-h-screen flex-col p-4 md:p-6 ${PAGE}`;
+const PAGE_BOX = `flex min-h-dvh flex-col p-4 md:p-6 ${PAGE}`;
 
 /** 1326 키('As7d') → 169 클래스. 강조할 셀을 정하는 **표시 전용** 변환이다 (D4). */
 function heroClassOf(combo: string): HandClassIndex | null {
