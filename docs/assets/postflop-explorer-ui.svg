@@ -21,23 +21,25 @@
   </g>
   <text class="sm mono" x="380" y="48">Pot 21.5</text>
   <text class="sm mono" x="452" y="48">Eff 89.2</text>
-  <text class="xs mono" x="700" y="48" fill="#94a3b8">exploitability 0.21% pot</text>
+  <text class="xs mono" x="520" y="48" fill="#475569">line B6.6-C/Qc</text>
+  <rect x="640" y="35" width="66" height="18" rx="9" fill="#e2e8f0"/><text class="xs" x="673" y="48" text-anchor="middle">정규 표기</text>
+  <text class="xs mono" x="716" y="48" fill="#94a3b8">expl 0.21% · perm [0,1,2,3]</text>
 
   <!-- action tree -->
   <text class="ttl" x="38" y="88">액션 트리</text>
   <g class="sm">
     <text x="38" y="110">▾ Flop</text>
-    <text x="52" y="130">▸ Check</text>
+    <text x="52" y="130">▸ X</text>
     <rect x="44" y="138" width="140" height="18" rx="4" fill="#eff6ff"/>
-    <text x="52" y="151" fill="#1d4ed8">▾ Bet 33</text><circle cx="128" cy="146" r="3.5" fill="#1d4ed8"/>
-    <text x="66" y="171">▸ Fold</text>
+    <text x="52" y="151" fill="#1d4ed8">▾ B6.6</text><circle cx="128" cy="146" r="3.5" fill="#1d4ed8"/>
+    <text x="66" y="171">▸ F</text>
     <rect x="58" y="179" width="126" height="18" rx="4" fill="#eff6ff"/>
-    <text x="66" y="192" fill="#1d4ed8">▾ Call</text><circle cx="128" cy="187" r="3.5" fill="#1d4ed8"/>
-    <text x="80" y="212">▾ Turn</text>
+    <text x="66" y="192" fill="#1d4ed8">▾ C</text><circle cx="128" cy="187" r="3.5" fill="#1d4ed8"/>
+    <text x="80" y="212">▾ Qc (Turn)</text>
     <text x="94" y="232" fill="#94a3b8">…</text>
   </g>
   <text class="cap" x="38" y="262">브레드크럼 + 클릭 이동</text>
-  <text class="cap" x="38" y="278">노드 이동마다 1 요청</text>
+  <text class="cap" x="38" y="278">노드 이동마다 1 요청 · ChanceNode → runouts</text>
   <line x1="200" y1="76" x2="200" y2="380" stroke="#e2e8f0"/>
 
   <!-- grid -->
@@ -72,9 +74,9 @@
     </g>
   </g>
   <g class="xs">
-    <rect x="222" y="212" width="9" height="9" fill="#dc2626"/><text x="236" y="220">Bet 75</text>
-    <rect x="290" y="212" width="9" height="9" fill="#f59e0b"/><text x="304" y="220">Bet 33</text>
-    <rect x="358" y="212" width="9" height="9" fill="#3b82f6"/><text x="372" y="220">Check</text>
+    <rect x="222" y="212" width="9" height="9" fill="#dc2626"/><text x="236" y="220">B15</text>
+    <rect x="290" y="212" width="9" height="9" fill="#f59e0b"/><text x="304" y="220">B6.6</text>
+    <rect x="358" y="212" width="9" height="9" fill="#3b82f6"/><text x="372" y="220">X</text>
   </g>
 
   <!-- runout heatmap -->
@@ -102,16 +104,16 @@
   <g>
     <rect x="522" y="100" width="318" height="22" rx="4" fill="#f8fafc"/>
     <rect x="522" y="100" width="184" height="22" rx="4" fill="#dbeafe"/>
-    <text class="sm" x="532" y="115">Check</text><text class="sm mono" x="830" y="115" text-anchor="end">58%</text>
+    <text class="sm" x="532" y="115">X</text><text class="sm mono" x="830" y="115" text-anchor="end">58%</text>
     <rect x="522" y="128" width="318" height="22" rx="4" fill="#f8fafc"/>
     <rect x="522" y="128" width="99" height="22" rx="4" fill="#fef3c7"/>
-    <text class="sm" x="532" y="143">Bet 33</text><text class="sm mono" x="830" y="143" text-anchor="end">31%</text>
+    <text class="sm" x="532" y="143">B6.6</text><text class="sm mono" x="830" y="143" text-anchor="end">31%</text>
     <rect x="522" y="156" width="318" height="22" rx="4" fill="#f8fafc"/>
     <rect x="522" y="156" width="35" height="22" rx="4" fill="#fee2e2"/>
-    <text class="sm" x="532" y="171">Bet 75</text><text class="sm mono" x="830" y="171" text-anchor="end">11%</text>
+    <text class="sm" x="532" y="171">B15</text><text class="sm mono" x="830" y="171" text-anchor="end">11%</text>
   </g>
   <line x1="522" y1="192" x2="840" y2="192" stroke="#e2e8f0"/>
-  <text class="sm" x="522" y="212">노드 EV</text><text class="lbl mono" x="830" y="212" text-anchor="end" fill="#059669">+12.84bb</text>
+  <text class="sm" x="522" y="212">노드 EV OOP · IP (= 팟)</text><text class="lbl mono" x="830" y="212" text-anchor="end" fill="#059669">+12.84 · +7.16</text>
   <text class="sm" x="522" y="234">OOP 에퀴티</text><text class="lbl mono" x="830" y="234" text-anchor="end">54.1%</text>
   <text class="sm" x="522" y="256">IP 에퀴티</text><text class="lbl mono" x="830" y="256" text-anchor="end">45.9%</text>
 
@@ -122,6 +124,6 @@
   </g>
   <text class="cap" x="522" y="336">뷰어가 곧 트레이너의 해설 화면이다 — 같은 컴포넌트를 마스킹만 벗겨 쓴다</text>
 
-  <text class="cap" x="20" y="418">P5 포스트플랍 탐색기 · 데스크톱 레이아웃. 값은 예시</text>
+  <text class="cap" x="20" y="418">P5 포스트플랍 탐색기 · 데스크톱 (≥ 1280) 3열. 값은 예시. line 은 D3 문법 (B6.6-C/Qc), 모바일 한 열은 p5-postflop-mobile.svg (R2 갱신)</text>
   <text class="cap" x="20" y="436" fill="#cbd5e1">GGTO · docs/assets/postflop-explorer-ui.svg</text>
 </svg>
