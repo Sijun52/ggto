@@ -376,6 +376,11 @@ export interface SolveNodeResponse {
   evAvgBb: [number, number];
   aggregate: SolveAggregateDto;
   evBasis: 'stack_delta_from_node';
+  /**
+   * 이 응답에 적용된 **원본 → 정규** 슈트 순열. 항등 `[0,1,2,3]` 이면 요청이 설정 쿼리를
+   * 주지 않아 응답이 **정규 보드 공간**이라는 뜻이다 (P4 R1 MAJOR 2 의 계약).
+   */
+  perm: [number, number, number, number];
 }
 
 export interface SolveRunoutCardDto {
@@ -388,8 +393,11 @@ export interface SolveRunoutCardDto {
 
 export interface SolveRunoutsResponse {
   line: string;
+  /** chance 노드의 보드 — 라인이 턴 카드를 지났으면 4장이다 */
   board: string;
   cards: SolveRunoutCardDto[];
+  /** `SolveNodeResponse.perm` 과 같은 의미 */
+  perm: [number, number, number, number];
 }
 
 export interface SolveListItemDto {

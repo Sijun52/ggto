@@ -113,6 +113,43 @@ describe('P4 5.2 메모리 게이트', () => {
     expect(small.handle.status).toBe('done');
   });
 
+  it('P4 5.2 큰 잡이 끝나면 슬롯 둘을 **동시에** 채운다 (R1 MAJOR 4)', async () => {
+    const dir = tmp();
+    // 7.5GB 하나가 도는 동안 1GB 둘은 메모리 게이트에 걸린다. 큰 잡이 끝나면 둘 다
+    // 들어갈 자리가 생긴다 — `#pump` 가 하나만 뽑으면 슬롯 하나가 논다.
+    const solver = new FakeSolver({ solveMs: 200, progressSteps: 2 });
+    const q = new JobQueue({ solver, concurrency: 2, memoryBytes: 8 * GB });
+    const big = submit(q, dir, BOARDS[0] as string, { estimate: { memoryBytes: 7.5 * GB } });
+    const s1 = submit(q, dir, BOARDS[1] as string, { estimate: { memoryBytes: 1 * GB } });
+    const s2 = submit(q, dir, BOARDS[2] as string, { estimate: { memoryBytes: 1 * GB } });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(big.handle.status).toBe('running');
+    expect([s1.handle.status, s2.handle.status]).toEqual(['queued', 'queued']);
+
+    await big.handle.done();
+    // 종료 직후 (마이크로태스크 한 번) 둘 다 실행 중이어야 한다.
+    await new Promise((r) => setTimeout(r, 20));
+    expect([s1.handle.status, s2.handle.status].filter((x) => x === 'running').length).toBe(2);
+    expect(q.runningMemoryBytes()).toBe(2 * GB);
+    await Promise.all([s1.handle.done(), s2.handle.done()]);
+  });
+
+  it('P4 5.2 루프가 메모리 게이트를 무시하지 않는다 (5GB 둘은 하나씩)', async () => {
+    const dir = tmp();
+    const solver = new FakeSolver({ solveMs: 200, progressSteps: 2 });
+    const q = new JobQueue({ solver, concurrency: 2, memoryBytes: 8 * GB });
+    const big = submit(q, dir, BOARDS[0] as string, { estimate: { memoryBytes: 7.5 * GB } });
+    const a = submit(q, dir, BOARDS[1] as string, { estimate: { memoryBytes: 5 * GB } });
+    const b = submit(q, dir, BOARDS[2] as string, { estimate: { memoryBytes: 5 * GB } });
+    await big.handle.done();
+    await new Promise((r) => setTimeout(r, 20));
+    // 5 + 5 = 10GB > 8GB 다. 슬롯이 둘 비어도 하나만 돌아야 한다.
+    expect(q.runningMemoryBytes()).toBe(5 * GB);
+    expect([a.handle.status, b.handle.status].filter((x) => x === 'running').length).toBe(1);
+    await Promise.all([a.handle.done(), b.handle.done()]);
+    expect(q.runningMemoryBytes()).toBe(0);
+  });
+
   it('P4 5.2 단일 잡이 상한을 넘으면 즉시 TooLarge 다 (큐에 들어가지 않는다)', () => {
     const dir = tmp();
     const q = new JobQueue({ solver: new FakeSolver(), concurrency: 2, memoryBytes: 8 * GB });

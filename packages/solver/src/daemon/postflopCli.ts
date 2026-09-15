@@ -104,6 +104,19 @@ function parseNode(raw: unknown): CanonicalNode {
   };
 }
 
+/**
+ * `runouts` 응답. `board` 는 **그 chance 노드의 보드**여야 한다 — 없으면 호출자가 시작
+ * 보드로 되돌려 딜된 카드를 잃는다 (P4 R1 MAJOR 1). 조용히 undefined 를 통과시키지 않는다.
+ */
+function parseRunouts(raw: unknown): CanonicalRunouts {
+  const r = raw as CanonicalRunouts;
+  if (typeof r.board !== 'string' || r.board.length < 6 || r.board.length % 2 !== 0) {
+    throw new SolverError('BadRequest', 'daemon returned runouts without a board');
+  }
+  if (!Array.isArray(r.cards)) throw new SolverError('BadRequest', 'daemon returned runouts without cards');
+  return r;
+}
+
 export interface PostflopSolverCliOptions {
   bin: string;
   chipsPerBb?: number;
@@ -227,12 +240,25 @@ export class PostflopSolverCli implements Solver {
     await client.request('load', { hash, path, chipsPerBb });
     return {
       node: async (line: string): Promise<CanonicalNode> => parseNode(await call('node', line)),
-      runouts: async (line: string): Promise<CanonicalRunouts> => (await call('runouts', line)) as CanonicalRunouts,
+      runouts: async (line: string): Promise<CanonicalRunouts> => parseRunouts(await call('runouts', line)),
       close: async (): Promise<void> => {
         const c = this.#serve;
         if (c !== null && c.alive) await c.request('unload', { hash }).catch(() => undefined);
       },
     };
+  }
+
+  /**
+   * 그 해시의 `.bin` 이 곧 바뀐다(재솔브 REPLACE)·사라진다(삭제) — 데몬이 들고 있으면 버린다.
+   *
+   * 데몬이 떠 있지 않으면 할 일이 없다 (**띄우지 않는다** — 삭제 때문에 프로세스를 새로
+   * 만드는 것은 낭비다). 이것만으로 충분하지 않다는 것이 R1 MAJOR 3 의 교훈이라
+   * 데몬 쪽 `load` 도 (크기, mtime) 이 다르면 다시 읽는다 — 그쪽이 진짜 보증이다.
+   */
+  async invalidate(hash: string): Promise<void> {
+    const c = this.#serve;
+    if (c === null || !c.alive) return;
+    await c.request('unload', { hash });
   }
 
   /** 서버 종료 시 상주 데몬을 정리한다. */

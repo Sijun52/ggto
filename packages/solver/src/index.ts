@@ -38,4 +38,11 @@ export {
   type SubmitInput,
 } from './queue.js';
 export * from './types.js';
-export { decodeRows, toNodeResponse, toRunoutsResponse, type NodeResponse, type RunoutsResponse } from './view.js';
+export {
+  boardWithDealt,
+  decodeRows,
+  toNodeResponse,
+  toRunoutsResponse,
+  type NodeResponse,
+  type RunoutsResponse,
+} from './view.js';

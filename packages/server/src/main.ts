@@ -109,6 +109,7 @@ function openSolver(): { solver: PostflopSolverCli; queue: JobQueue; cache: Solv
   const cache = new SolveCache({
     dir: join(dataDir, 'solves'),
     capBytes: envBytes('GGTO_SOLVE_CACHE_BYTES', DEFAULT_CACHE_BYTES),
+    // 무효화 훅은 `solveRoutes` 가 건다 (P4 R1 MAJOR 3) — 라우트가 캐시와 솔버를 둘 다 안다.
   });
   // 기동 정리는 여기서만 한다 (P4.md 7절). 데몬은 안 띄운다.
   const report = cache.repair();

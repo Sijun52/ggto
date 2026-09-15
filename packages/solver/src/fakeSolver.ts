@@ -9,8 +9,8 @@
  * 전략은 `configHash` 로 시드한 core rng 에서 나온다: 같은 설정 → 같은 숫자.
  */
 
-import { COMBO_COUNT, createRng, formatCards, type Rng } from '@ggto/core';
-import { writeFileSync } from 'node:fs';
+import { COMBO_COUNT, createRng, formatCards, parseCard, type Rng } from '@ggto/core';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { configHash } from './hash.js';
 import {
   SolverError,
@@ -38,13 +38,42 @@ export interface FakeSolverOptions {
   estimateMs?: number;
 }
 
-function seedFrom(hash: string): number {
-  // 해시 앞 8 hex = 32비트. 같은 설정이면 같은 전략이 나온다.
-  return Number.parseInt(hash.slice(0, 8), 16) >>> 0;
+/**
+ * `.bin` 첫 줄에 적는 헤더. **결과는 파일에서 나온다** — 실제 솔버와 같은 계약이다.
+ * 이게 없으면 재솔브(같은 해시, 다른 정확도)가 같은 숫자를 내서 "낡은 결과를 준다" 는
+ * 버그를 테스트가 구분할 수 없다 (P4 R1 MAJOR 3).
+ */
+interface FakeBinHeader {
+  hash: string;
+  iterations: number;
+  targetExploitabilityPct: number;
 }
 
-function streetOf(cfg: CanonicalConfig): Street {
-  return cfg.board.length === 3 ? 'flop' : cfg.board.length === 4 ? 'turn' : 'river';
+/** FNV-1a 32비트. 파일 헤더 **전체**를 시드로 쓴다 — 정확도가 달라지면 결과도 달라진다. */
+function fnv1a(text: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h >>> 0;
+}
+
+function readHeader(path: string): { header: FakeBinHeader; seed: number } {
+  let raw: Buffer;
+  try {
+    raw = readFileSync(path);
+  } catch (e) {
+    throw new SolverError('NotLoaded', `fake solver cannot read ${path}: ${e instanceof Error ? e.message : String(e)}`);
+  }
+  const nl = raw.indexOf(0x0a);
+  if (nl < 0) throw new SolverError('NotLoaded', `fake solver: ${path} has no header line`);
+  const text = raw.subarray(0, nl).toString('utf8');
+  return { header: JSON.parse(text) as FakeBinHeader, seed: fnv1a(text) };
+}
+
+function streetOf(boardLen: number): Street {
+  return boardLen === 3 ? 'flop' : boardLen === 4 ? 'turn' : 'river';
 }
 
 function sleep(ms: number): Promise<void> {
@@ -60,6 +89,8 @@ export class FakeSolver implements Solver {
   readonly #written = new Map<string, CanonicalConfig>();
   solveCalls = 0;
   estimateCalls = 0;
+  /** `invalidate(hash)` 호출 기록 (P4 R1 MAJOR 3 테스트용) */
+  readonly invalidated: string[] = [];
 
   constructor(opts: FakeSolverOptions = {}) {
     this.#opts = opts;
@@ -101,8 +132,18 @@ export class FakeSolver implements Solver {
     }
     if (signal.aborted) throw new SolverError('Cancelled', 'cancelled');
     const bytes = this.#opts.bytes ?? 4096;
-    writeFileSync(opts.outPath, Buffer.alloc(bytes, 7));
-    this.#written.set(configHash(cfg), cfg);
+    const hash = configHash(cfg);
+    const header: FakeBinHeader = {
+      hash,
+      iterations: steps * 10,
+      targetExploitabilityPct: opts.targetExploitabilityPct,
+    };
+    const buf = Buffer.alloc(bytes, 7);
+    const head = Buffer.from(`${JSON.stringify(header)}\n`, 'utf8');
+    if (head.byteLength > bytes) throw new SolverError('BadRequest', `fake bytes=${String(bytes)} is too small for a header`);
+    head.copy(buf);
+    writeFileSync(opts.outPath, buf);
+    this.#written.set(hash, cfg);
     return {
       iterations: steps * 10,
       exploitabilityPct: opts.targetExploitabilityPct,
@@ -111,31 +152,72 @@ export class FakeSolver implements Solver {
     };
   }
 
-  /** 노드는 설정 해시로 시드된 결정적 3-액션 트리 하나다. */
-  async open(hash: string, _path: string): Promise<ResultHandle> {
+  /**
+   * 노드는 **파일 헤더**(해시 + 반복수)로 시드된 결정적 3-액션 트리다.
+   *
+   * 파일을 매번 읽는 것이 핵심이다: 재솔브로 `.bin` 이 바뀌면 다음 `open` 이 다른 숫자를
+   * 준다. 캐시에 남은 옛 결과를 그대로 답하면 테스트가 잡는다 (P4 R1 MAJOR 3).
+   */
+  async open(hash: string, path: string): Promise<ResultHandle> {
     const cfg = this.#written.get(hash);
     if (cfg === undefined) throw new SolverError('NotLoaded', `fake solver has no result for ${hash}`);
-    const make = (line: string): CanonicalNode => fakeNode(cfg, hash, line);
+    const { header, seed } = readHeader(path);
+    if (header.hash !== hash) {
+      throw new SolverError('NotLoaded', `${path} holds ${header.hash}, not ${hash}`);
+    }
     return {
       node: async (line: string): Promise<CanonicalNode> => {
-        if (line !== '' && line !== 'X' && line !== 'B1' && line !== 'B2') {
-          throw new SolverError('NoSuchLine', `fake tree has no line ${JSON.stringify(line)}`);
-        }
-        return make(line);
+        const dealt = parseFakeLine(cfg, line);
+        return fakeNode(cfg, seed, line, dealt);
       },
       runouts: async (line: string): Promise<CanonicalRunouts> => {
-        if (cfg.board.length >= 5) throw new SolverError('NotChanceNode', 'river has no runouts');
-        return fakeRunouts(cfg, line);
+        const dealt = parseFakeLine(cfg, line);
+        if (cfg.board.length + dealt.length >= 5) throw new SolverError('NotChanceNode', 'river has no runouts');
+        return fakeRunouts(cfg, line, dealt);
       },
       close: async (): Promise<void> => undefined,
     };
   }
+
+  /** 조회 데몬이 없으니 기록만 한다 — 훅이 실제로 불렸는지 테스트가 본다. */
+  async invalidate(hash: string): Promise<void> {
+    this.invalidated.push(hash);
+  }
+}
+
+const FAKE_ACTION_SEGS = new Set(['X', 'B1', 'B2', 'X-X', 'B1-C', 'B2-C']);
+
+/**
+ * 가짜 트리의 `line` 파서. 액션 세그먼트는 고정 목록이고, **카드 세그먼트**는 그 스트리트에
+ * 깔린 카드다 (P4.md 5.4). 카드 세그먼트를 지원해야 "턴 라인의 board 에 딜된 카드가 있는가"
+ * 를 Rust 없이 검사할 수 있다 (P4 R1 MAJOR 1).
+ */
+function parseFakeLine(cfg: CanonicalConfig, line: string): string[] {
+  if (line === '') return [];
+  const dealt: string[] = [];
+  const used = new Set(cfg.board.map((c) => formatCards([c])));
+  for (const seg of line.split('/')) {
+    if (FAKE_ACTION_SEGS.has(seg)) continue;
+    let card: string;
+    try {
+      card = formatCards([parseCard(seg)]);
+    } catch {
+      throw new SolverError('NoSuchLine', `fake tree has no segment ${JSON.stringify(seg)}`);
+    }
+    if (used.has(card)) throw new SolverError('NoSuchLine', `card ${card} is already on the board`);
+    used.add(card);
+    dealt.push(card);
+  }
+  if (cfg.board.length + dealt.length > 5) {
+    throw new SolverError('NoSuchLine', `line deals past the river: ${JSON.stringify(line)}`);
+  }
+  return dealt;
 }
 
 const FAKE_ACTIONS = ['X', 'B1', 'B2'];
 
-function fakeNode(cfg: CanonicalConfig, hash: string, line: string): CanonicalNode {
-  const rng: Rng = createRng(seedFrom(hash) ^ line.length);
+function fakeNode(cfg: CanonicalConfig, seed: number, line: string, dealt: readonly string[]): CanonicalNode {
+  const rng: Rng = createRng((seed ^ Math.imul(line.length, 0x9e3779b1)) >>> 0);
   const reachOop = new Float32Array(cfg.ranges[0]);
   const reachIp = new Float32Array(cfg.ranges[1]);
   const strategy = FAKE_ACTIONS.map(() => new Float32Array(COMBO_COUNT));
@@ -151,10 +233,12 @@ function fakeNode(cfg: CanonicalConfig, hash: string, line: string): CanonicalNo
       (ev[a] as Float32Array)[c] = freq * (cfg.potChips / cfg.chipsPerBb);
     }
   }
+  const boardLen = cfg.board.length + dealt.length;
   return {
-    street: streetOf(cfg),
+    street: streetOf(boardLen),
     line,
-    board: formatCards(cfg.board),
+    // 라인이 카드를 지났으면 **그 카드가 보드에 있다** (P4 R1 MAJOR 1).
+    board: formatCards(cfg.board) + dealt.join(''),
     player: line === '' ? 'oop' : 'ip',
     potChips: cfg.potChips,
     stacksChips: [cfg.stackChips, cfg.stackChips],
@@ -168,8 +252,8 @@ function fakeNode(cfg: CanonicalConfig, hash: string, line: string): CanonicalNo
   };
 }
 
-function fakeRunouts(cfg: CanonicalConfig, line: string): CanonicalRunouts {
-  const dead = new Set(cfg.board);
+function fakeRunouts(cfg: CanonicalConfig, line: string, dealt: readonly string[]): CanonicalRunouts {
+  const dead = new Set<number>([...cfg.board, ...dealt.map((c) => parseCard(c))]);
   const cards: CanonicalRunouts['cards'] = [];
   const RANKS = '23456789TJQKA';
   const SUITS = 'cdhs';
@@ -183,5 +267,5 @@ function fakeRunouts(cfg: CanonicalConfig, line: string): CanonicalRunouts {
       strategyRoot: [1 / 3, 1 / 3, 1 / 3],
     });
   }
-  return { line, cards };
+  return { line, board: formatCards(cfg.board) + dealt.join(''), cards };
 }

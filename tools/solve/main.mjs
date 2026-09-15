@@ -83,7 +83,9 @@ async function main() {
     SolveCache,
     SolveConfigError,
     SolverError,
+    boardWithDealt,
     buildConfig,
+    canonicalConfigJson,
     configHash,
     permuteLine,
     resolveBin,
@@ -146,8 +148,16 @@ async function main() {
 
   const hash = configHash(cfg);
   const dataDir = process.env.GGTO_DATA_DIR ?? join(REPO_ROOT, 'data');
-  const cache = new SolveCache({ dir: join(dataDir, 'solves') });
   const solver = new PostflopSolverCli({ bin, onLog: () => undefined });
+  // 서버와 같은 훅 (P4 R1 MAJOR 3): 재솔브·삭제 전에 조회 데몬이 낡은 결과를 버린다.
+  const cache = new SolveCache({
+    dir: join(dataDir, 'solves'),
+    onInvalidate: (h) => {
+      void solver.invalidate(h).catch((e) => {
+        console.error(`unload ${h} 실패: ${e instanceof Error ? e.message : String(e)}`);
+      });
+    },
+  });
   const queue = new JobQueue({ solver });
 
   const canonicalBoard = cfg.board.map((c) => '23456789TJQKA'[c >> 2] + 'cdhs'[c & 3]).join('');
@@ -188,7 +198,8 @@ async function main() {
           cache.evictFor(summary.bytes, queue.activeHashes());
           cache.commit({
             hash,
-            configJson: JSON.stringify({ board: canonicalBoard, pot: cfg.potChips, stack: cfg.stackChips }),
+            // 정규 JSON 전체 (P4.md 4.1). 서버와 같은 행을 쓴다.
+            configJson: canonicalConfigJson(cfg),
             boardCanonical: canonicalBoard,
             street: cfg.board.length === 3 ? 'flop' : cfg.board.length === 4 ? 'turn' : 'river',
             potChips: cfg.potChips,
@@ -244,8 +255,9 @@ async function main() {
       try {
         const node = await handleResult.node(permuteLine(line, cfg.perm));
         const res = toNodeResponse(node, cfg.perm);
-        // 역순열은 슈트를 되돌리지만 **순서**는 정규 보드의 정렬 순서다. 사용자가 친 그대로 보여준다.
-        res.board = need(args, 'board');
+        // 역순열은 슈트를 되돌리지만 **순서**는 정규 보드의 정렬 순서다. 사용자가 친 그대로
+        // 보여주되 라인에서 딜된 카드는 지운다 (P4 R1 MAJOR 1).
+        res.board = boardWithDealt(need(args, 'board'), res.board);
         if (args.flags.has('json')) {
           console.log(JSON.stringify(res));
         } else {

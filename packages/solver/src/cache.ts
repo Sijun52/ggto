@@ -120,11 +120,25 @@ export class SolveCache {
   readonly #now: () => number;
   /** `last_used_at` 갱신 스로틀 (초당 1회, P4.md 4.2) */
   readonly #touchedAt = new Map<string, number>();
+  /** `.bin` 이 바뀌거나 사라지기 **직전**에 부른다 (P4 R1 MAJOR 3) */
+  readonly #invalidateListeners = new Set<(hash: string) => void>();
 
-  constructor(opts: { dir: string; capBytes?: number; now?: () => number }) {
+  constructor(opts: {
+    dir: string;
+    capBytes?: number;
+    now?: () => number;
+    /**
+     * 파일이 바뀌거나 지워지기 직전에 호출된다 — 조회 데몬이 그 결과를 들고 있으면
+     * 버리라고 알리는 훅이다 (`Solver.invalidate`). 캐시는 솔버를 모르므로(2절) 훅으로
+     * 받는다. 훅이 없어도 **정답은 유지된다**: 데몬이 `load` 때 (크기, mtime) 을 비교해
+     * 다시 읽는다. 훅은 메모리를 더 일찍 돌려받기 위한 것이다.
+     */
+    onInvalidate?: (hash: string) => void;
+  }) {
     this.dir = opts.dir;
     this.capBytes = opts.capBytes ?? DEFAULT_CACHE_BYTES;
     this.#now = opts.now ?? ((): number => Date.now());
+    if (opts.onInvalidate !== undefined) this.#invalidateListeners.add(opts.onInvalidate);
     mkdirSync(this.dir, { recursive: true });
     this.#db = new DatabaseSync(join(this.dir, 'index.db'));
     this.#db.exec('PRAGMA journal_mode = WAL');
@@ -138,6 +152,24 @@ export class SolveCache {
     if (v !== 0) throw new CacheSchemaVersionError(v);
     this.#db.exec(DDL);
     this.#db.exec(`PRAGMA user_version = ${String(CACHE_SCHEMA_VERSION)}`);
+  }
+
+  /**
+   * 무효화 리스너 등록. 해제 함수를 돌려준다.
+   *
+   * 생성자 옵션이 아니라 **등록**인 이유: 캐시를 만드는 곳(서버 main·CLI·테스트)과 솔버를
+   * 아는 곳(라우트)이 다르다. 라우트가 직접 걸면 `createApp` 을 쓰는 모든 경로가 자동으로
+   * 무효화를 얻는다 — 훅을 잊어서 낡은 결과를 주는 일이 구조적으로 없어진다.
+   */
+  onInvalidate(fn: (hash: string) => void): () => void {
+    this.#invalidateListeners.add(fn);
+    return (): void => {
+      this.#invalidateListeners.delete(fn);
+    };
+  }
+
+  #fireInvalidate(hash: string): void {
+    for (const fn of this.#invalidateListeners) fn(hash);
   }
 
   binPath(hash: string): string {
@@ -210,7 +242,11 @@ export class SolveCache {
     const part = this.partPath(row.hash);
     if (!existsSync(part)) throw new Error(`no .part to commit for ${row.hash}`);
     const bin = this.binPath(row.hash);
-    if (existsSync(bin)) rmSync(bin, { force: true });
+    // 재솔브 REPLACE 다 — 데몬이 들고 있는 옛 결과를 먼저 버리게 한다 (P4 R1 MAJOR 3).
+    if (existsSync(bin)) {
+      this.#fireInvalidate(row.hash);
+      rmSync(bin, { force: true });
+    }
     renameSync(part, bin);
     const bytes = row.bytes ?? statSync(bin).size;
     const now = this.#now();
@@ -247,6 +283,7 @@ export class SolveCache {
   }
 
   remove(hash: string): boolean {
+    this.#fireInvalidate(hash);
     const info = this.#db.prepare('DELETE FROM solve WHERE hash = ?').run(hash);
     rmSync(this.binPath(hash), { force: true });
     rmSync(this.partPath(hash), { force: true });

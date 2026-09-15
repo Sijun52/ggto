@@ -171,5 +171,10 @@ pub fn runouts_response(game: &mut PostFlopGame, line: &str, chips_per_bb: i32) 
         }));
         game.apply_history(&history);
     }
-    Ok(json!({ "line": canonical_line, "cards": cards }))
+    // `board` 는 **그 chance 노드의 보드** 다 (아직 카드가 깔리기 전). 라인이 턴 카드를
+    // 이미 지났다면 4장이다 — 호출자가 시작 보드로 되돌려 쓰면 딜된 카드가 사라진다
+    // (P4 R1 MAJOR 1).
+    game.apply_history(&history);
+    let board = board_string(game)?;
+    Ok(json!({ "line": canonical_line, "board": board, "cards": cards }))
 }

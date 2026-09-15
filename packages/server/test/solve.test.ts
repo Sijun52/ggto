@@ -188,8 +188,29 @@ describe('P4 7 node / runouts / solves', () => {
     return { app, hash: body.hash, cache };
   }
 
+  /** `solved()` 와 같지만 솔버 더블도 돌려준다 (invalidate 호출을 본다) */
+  async function solvedWith(): Promise<{
+    app: ReturnType<typeof createApp>;
+    hash: string;
+    cache: SolveCache;
+    solver: FakeSolver;
+  }> {
+    const { app, cache, solver } = makeApp();
+    const body = (await (await post(app, { ...BODY, confirm: true })).json()) as { jobId: string; hash: string };
+    await (await app.request(`/api/solve/${body.jobId}/events`)).text();
+    return { app, hash: body.hash, cache, solver };
+  }
+
   const q = (board = 'Ks7h2h'): string =>
     `board=${board}&oop=${encodeURIComponent(BODY.oop)}&ip=${encodeURIComponent(BODY.ip)}&potBb=20&stackBb=80`;
+
+  /** 응답의 base64 전략을 f32 로 (전략이 바뀌었는지 비교용) */
+  const strategyOf = (b64: string): Float32Array => {
+    const buf = Buffer.from(b64, 'base64');
+    const copy = new Uint8Array(buf.byteLength);
+    copy.set(buf);
+    return new Float32Array(copy.buffer);
+  };
 
   it('P4 7 node 는 base64 6종 + 169 집계 + evBasis 를 준다', async () => {
     const { app, hash } = await solved();
@@ -219,6 +240,138 @@ describe('P4 7 node / runouts / solves', () => {
     const missing = await app.request(`/api/solve/${'f'.repeat(64)}/node?line=&${q()}`);
     expect(missing.status).toBe(404);
     expect(((await missing.json()) as { error: { code: string } }).error.code).toBe('NoSolve');
+  });
+
+  it('P4 7 턴 라인의 board 에 딜된 카드가 남는다 (R1 MAJOR 1)', async () => {
+    const { app, hash } = await solved();
+    const res = await app.request(`/api/solve/${hash}/node?line=${encodeURIComponent('X-X/Qc')}&${q()}`);
+    expect(res.status).toBe(200);
+    const node = (await res.json()) as { street: string; board: string; perm: number[] };
+    // 플랍 솔브 + 턴 카드 Qc → street 는 turn 이고 board 는 **4장**이다.
+    expect(node.street).toBe('turn');
+    expect(node.board).toBe('Ks7h2hQc');
+    expect(node.board.length).toBe(8);
+    expect(node.perm).toHaveLength(4);
+  });
+
+  it('P4 7 슈트만 바꾼 표기로 물으면 딜된 카드도 그 표기로 돌아온다 (R1 MAJOR 1·6)', async () => {
+    const { app, hash } = await solved();
+    // 레인지가 슈트 대칭이라 Kd7s2s 도 같은 해시다 (D5). 사용자의 슈트로 답해야 한다.
+    const res = await app.request(
+      `/api/solve/${hash}/node?line=${encodeURIComponent('X-X/Qh')}&${q('Kd7s2s')}`,
+    );
+    expect(res.status).toBe(200);
+    const node = (await res.json()) as { street: string; board: string; line: string };
+    expect(node.street).toBe('turn');
+    expect(node.board).toBe('Kd7s2sQh');
+    expect(node.line).toBe('X-X/Qh');
+  });
+
+  it('P4 7 runouts 도 딜된 카드를 포함한 보드를 준다 (R1 MAJOR 1)', async () => {
+    const { app, hash } = await solved();
+    const res = await app.request(`/api/solve/${hash}/runouts?line=${encodeURIComponent('X-X/Qc/X-X')}&${q()}`);
+    expect(res.status).toBe(200);
+    const r = (await res.json()) as { board: string; cards: { card: string }[] };
+    expect(r.board).toBe('Ks7h2hQc');
+    // 리버 chance: 보드 4장을 뺀 48장.
+    expect(r.cards.length).toBe(48);
+    for (const b of ['Ks', '7h', '2h', 'Qc']) expect(r.cards.some((c) => c.card === b)).toBe(false);
+  });
+
+  it('P4 7 쿼리 설정이 이 해시의 것이 아니면 400 HashMismatch 다 (R1 MAJOR 2)', async () => {
+    const { app, hash } = await solved();
+    // 다른 게임 (보드도 레인지도 다르다). 옛 코드는 그 perm 을 이 게임의 1326 배열에
+    // 적용해 `board: Ad5d5c` 로 200 을 줬다.
+    const res = await app.request(
+      `/api/solve/${hash}/node?line=&board=Ad5d5c&oop=AsKs&ip=QhQd&potBb=20&stackBb=80`,
+    );
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { error: { code: string } }).error.code).toBe('HashMismatch');
+
+    // 팟만 달라도 다른 게임이다.
+    const potOff = await app.request(
+      `/api/solve/${hash}/node?line=&board=Ks7h2h&oop=${encodeURIComponent(BODY.oop)}&ip=${encodeURIComponent(BODY.ip)}&potBb=21&stackBb=80`,
+    );
+    expect(potOff.status).toBe(400);
+
+    // 사이징 프리셋만 달라도 다른 게임이다.
+    const sizingOff = await app.request(`/api/solve/${hash}/node?line=&${q()}&sizings=standard`);
+    expect(sizingOff.status).toBe(400);
+
+    // runouts 도 같은 검증을 한다.
+    const ro = await app.request(
+      `/api/solve/${hash}/runouts?line=X-X&board=Ad5d5c&oop=AsKs&ip=QhQd&potBb=20&stackBb=80`,
+    );
+    expect(ro.status).toBe(400);
+  });
+
+  it('P4 7 쿼리를 아예 주지 않으면 정규 보드 + perm 항등으로 답한다', async () => {
+    const { app, hash } = await solved();
+    const res = await app.request(`/api/solve/${hash}/node?line=`);
+    expect(res.status).toBe(200);
+    const node = (await res.json()) as { board: string; perm: number[] };
+    expect(node.perm).toEqual([0, 1, 2, 3]);
+    // 정규 보드다 (사용자가 보낸 Ks7h2h 와 다를 수 있다).
+    const canonical = buildConfig(BODY)
+      .board.map((c) => `${'23456789TJQKA'[c >> 2] as string}${'cdhs'[c & 3] as string}`)
+      .join('');
+    expect(node.board).toBe(canonical);
+  });
+
+  it('P4 7 반쪽 설정 쿼리는 400 이다 (조용히 정규 보드로 떨어지지 않는다)', async () => {
+    const { app, hash } = await solved();
+    const res = await app.request(`/api/solve/${hash}/node?line=&board=Ks7h2h`);
+    expect(res.status).toBe(400);
+  });
+
+  it('P4 7 재솔브 뒤 node 는 **새** 결과를 준다 (R1 MAJOR 3)', async () => {
+    const { app, cache, solver } = makeApp();
+    const first = (await (await post(app, { ...BODY, targetExploitabilityPct: 1, confirm: true })).json()) as {
+      jobId: string;
+      hash: string;
+    };
+    await (await app.request(`/api/solve/${first.jobId}/events`)).text();
+    const before = (await (await app.request(`/api/solve/${first.hash}/node?line=&${q()}`)).json()) as {
+      strategy: string;
+    };
+
+    // 더 정확한 목표로 다시 요청하면 캐시 미스 → 재솔브 → REPLACE (4.3).
+    const second = (await (
+      await post(app, { ...BODY, targetExploitabilityPct: 0.1, confirm: true })
+    ).json()) as { jobId: string | null; hash: string; cached: boolean };
+    expect(second.cached).toBe(false);
+    expect(second.hash).toBe(first.hash);
+    expect(second.jobId).not.toBeNull();
+    await (await app.request(`/api/solve/${second.jobId as string}/events`)).text();
+    expect(cache.get(first.hash)?.exploitability).toBe(0.1);
+
+    const after = (await (await app.request(`/api/solve/${first.hash}/node?line=&${q()}`)).json()) as {
+      strategy: string;
+    };
+    const a = strategyOf(before.strategy);
+    const b = strategyOf(after.strategy);
+    let max = 0;
+    for (let i = 0; i < a.length; i++) max = Math.max(max, Math.abs((a[i] as number) - (b[i] as number)));
+    // 낡은 `.bin` 을 그대로 답하면 diff 가 정확히 0 이다 (R1 실측).
+    expect(max).toBeGreaterThan(0);
+    // 파일이 바뀌기 직전에 솔버에게 "버려라" 라고 알렸다.
+    expect(solver.invalidated).toContain(first.hash);
+  });
+
+  it('P4 7 DELETE /api/solves/:hash 도 invalidate 를 부른다 (R1 MAJOR 3)', async () => {
+    const { app, hash, solver } = await solvedWith();
+    expect((await app.request(`/api/solves/${hash}`, { method: 'DELETE' })).status).toBe(204);
+    expect(solver.invalidated).toContain(hash);
+  });
+
+  it('P4 4.1 저장된 행의 config_json 이 정규 JSON 이다 (R1 MAJOR 5)', async () => {
+    const { hash, cache } = await solved();
+    const row = cache.get(hash);
+    expect(row).not.toBeNull();
+    const parsed = JSON.parse((row as { configJson: string }).configJson) as { oop: string; ip: string; v: number };
+    expect(parsed.oop.length).toBe(1326 * 8);
+    expect(parsed.ip.length).toBe(1326 * 8);
+    expect(parsed.v).toBe(1);
   });
 
   it('P4 7 GET /api/solves 가 목록과 총량을 준다', async () => {

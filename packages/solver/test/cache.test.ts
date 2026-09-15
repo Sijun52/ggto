@@ -9,12 +9,15 @@ import { existsSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync }
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { createHash } from 'node:crypto';
 import { SolveCache, type SolveRow } from '../src/cache.js';
+import { buildConfig } from '../src/config.js';
+import { canonicalConfigJson, configHash } from '../src/hash.js';
 
 const dirs: string[] = [];
 const caches: SolveCache[] = [];
 
-function open(opts: { capBytes?: number; now?: () => number } = {}): SolveCache {
+function open(opts: { capBytes?: number; now?: () => number; onInvalidate?: (hash: string) => void } = {}): SolveCache {
   const dir = mkdtempSync(join(tmpdir(), 'ggto-cache-'));
   dirs.push(dir);
   const c = new SolveCache({ dir, ...opts });
@@ -210,5 +213,79 @@ describe('P4 4.2 last_used_at 스로틀', () => {
     now += 2000;
     c.touch(hash);
     expect(c.get(hash)?.lastUsedAt).toBe(now);
+  });
+});
+
+/** P4 R1 MAJOR 5 — `config_json` 은 **정규 JSON 전체**다 (4.1). 행만으로 게임을 재현한다. */
+describe('P4 4.1 config_json', () => {
+  it('P4 4.1 저장된 행의 config_json 이 정규 JSON 이고 1326 레인지 둘을 담는다', () => {
+    const c = open();
+    const cfg = buildConfig({
+      oop: '22+,A2s+',
+      ip: 'TT-22,AJs-A2s',
+      board: 'Ks7h2h',
+      potBb: 20,
+      stackBb: 80,
+      sizings: 'simple',
+    });
+    const hash = configHash(cfg);
+    writeFileSync(c.partPath(hash), Buffer.alloc(16, 1));
+    c.commit({
+      hash,
+      configJson: canonicalConfigJson(cfg),
+      boardCanonical: '2h7hKs',
+      street: 'flop',
+      potChips: cfg.potChips,
+      stackChips: cfg.stackChips,
+      sizings: JSON.stringify(cfg.sizings),
+      compressed: false,
+      exploitability: 0.4,
+      iterations: 100,
+      solver: 'fake',
+      evBasis: 'stack_delta_from_node',
+      elapsedMs: 10,
+    });
+    const row = c.get(hash) as SolveRow;
+    const parsed = JSON.parse(row.configJson) as {
+      v: number;
+      oop: string;
+      ip: string;
+      board: string;
+      pot: number;
+      stack: number;
+      sizings: { flop: { bet: string } };
+    };
+    // 1326 f32 = 5304 바이트 = 10608 hex 문자.
+    expect(parsed.oop.length).toBe(1326 * 8);
+    expect(parsed.ip.length).toBe(1326 * 8);
+    expect(parsed.v).toBe(1);
+    expect(parsed.pot).toBe(2000);
+    expect(parsed.sizings.flop.bet).toBe('33%,75%');
+    // 행만으로 해시를 다시 만들 수 있다 = 게임이 완전히 기술돼 있다.
+    expect(createHash('sha256').update(row.configJson, 'utf8').digest('hex')).toBe(hash);
+  });
+});
+
+/** P4 R1 MAJOR 3 — 파일이 바뀌거나 사라지기 **직전**에 훅이 불린다. */
+describe('P4 4.2 onInvalidate 훅', () => {
+  it('P4 4.2 REPLACE 커밋과 remove 가 훅을 부른다', () => {
+    const seen: string[] = [];
+    const c = open({ onInvalidate: (h) => seen.push(h) });
+    const hash = 'c'.repeat(64);
+    put(c, hash, 1024);
+    // 첫 커밋에는 옛 파일이 없다 — 버릴 것이 없으므로 훅도 없다.
+    expect(seen).toEqual([]);
+    put(c, hash, 2048, 0.1);
+    expect(seen).toEqual([hash]);
+    c.remove(hash);
+    expect(seen).toEqual([hash, hash]);
+  });
+
+  it('P4 4.2 LRU 축출도 훅을 부른다 (지워진 파일을 데몬이 들고 있으면 안 된다)', () => {
+    const seen: string[] = [];
+    const c = open({ capBytes: 4096, onInvalidate: (h) => seen.push(h) });
+    put(c, 'd'.repeat(64), 3072);
+    c.evictFor(3072, new Set());
+    expect(seen).toEqual(['d'.repeat(64)]);
   });
 });

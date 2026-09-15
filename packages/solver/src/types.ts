@@ -180,6 +180,12 @@ export interface RunoutCard {
 
 export interface CanonicalRunouts {
   line: string;
+  /**
+   * 그 chance 노드의 보드 (정규 슈트, 아직 카드가 깔리기 전).
+   * 라인이 턴 카드를 지났으면 4장이다 — 시작 보드로 되돌리면 딜된 카드가 사라진다
+   * (P4 R1 MAJOR 1).
+   */
+  board: string;
   cards: RunoutCard[];
 }
 
@@ -200,4 +206,14 @@ export interface Solver {
     signal: AbortSignal,
   ): Promise<SolveSummary>;
   open(hash: string, path: string): Promise<ResultHandle>;
+  /**
+   * 그 해시의 `.bin` 이 곧 바뀌거나 사라진다 — 들고 있는 결과를 버려라.
+   *
+   * 재솔브(REPLACE)·삭제 뒤에도 조회 데몬이 낡은 결과를 답하던 버그의 수정이다
+   * (P4 R1 MAJOR 3). 데몬 쪽 `(크기, mtime)` 검사가 **실제 보증**이고 (프로세스가
+   * 죽었다 살아나도, CLI 경로로 파일이 바뀌어도 성립한다), 이 호출은 메모리를 더 일찍
+   * 돌려받기 위한 것이다. 둘 다 있어야 하는 이유: 훅은 잊힐 수 있고, 데몬 검사는
+   * 다음 `load` 까지 메모리를 붙잡는다.
+   */
+  invalidate(hash: string): Promise<void>;
 }

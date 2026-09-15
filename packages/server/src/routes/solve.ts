@@ -12,13 +12,17 @@ import {
   SolveConfigError,
   SolverError,
   assertCanonicalLine,
+  boardWithDealt,
   buildConfig,
+  canonicalConfigJson,
   configHash,
+  isSizingPreset,
   permuteLine,
   toNodeResponse,
   toRunoutsResponse,
   type CanonicalConfig,
   type JobEvent,
+  type SizingPresetName,
   type Solver,
 } from '@ggto/solver';
 import type {
@@ -104,35 +108,62 @@ function listItem(row: {
 }
 
 /**
- * `hash` 로 저장된 결과를 열어 노드를 읽는다.
+ * `hash` 로 저장된 결과를 열어 노드를 읽을 때 쓸 **슈트 순열**을 구한다.
  *
- * 슈트 역순열에 필요한 `perm` 은 **요청의 설정에서 다시 계산한다** — 캐시 행에 저장하지
- * 않는다 (P4.md 4.1: 한 해시에 여러 perm 이 대응하므로 저장하면 모순이 된다). 그래서
- * `node`/`runouts` 요청은 `board`·`oop`·`ip` 를 함께 받아야 정확한 슈트로 답할 수 있다.
- * 없으면 **정규 보드 그대로** 준다 (정규 보드도 유효한 표기다 — 사용자에게 거짓말이 아니다).
+ * `perm` 은 캐시 행에 저장하지 않는다 (P4.md 4.1: 한 해시에 여러 perm 이 대응하므로
+ * 저장하면 모순이 된다) — 요청의 설정에서 다시 계산한다.
+ *
+ * **그래서 설정이 그 해시의 것인지 검증해야 한다** (R1 MAJOR 2): 쿼리로 온 설정에서
+ * 해시를 다시 계산해 경로의 `:hash` 와 같지 않으면 400 이다. 검증하지 않으면 다른 게임의
+ * `perm` 을 이 게임의 1326 배열에 적용해 **뒤섞인 배열을 원본이라고** 답하게 된다
+ * (실측: `board=Ad5d5c` 로 200).
+ *
+ * 쿼리가 **아예 없으면** 순열 없이 정규 보드 공간 그대로 답한다 (응답의 `perm` 이
+ * 항등 `[0,1,2,3]` 으로 그 사실을 알린다). 정규 보드도 유효한 표기다 — 거짓말이 아니다.
  */
-function permFor(url: string): { perm: [number, number, number, number] | null; cfg: CanonicalConfig | null } {
+function permFor(url: string, hash: string): { perm: [number, number, number, number] | null; cfg: CanonicalConfig | null } {
   const board = queryParam(url, 'board');
   const oop = queryParam(url, 'oop');
   const ip = queryParam(url, 'ip');
   const potBb = queryParam(url, 'potBb');
   const stackBb = queryParam(url, 'stackBb');
-  if (board === null || oop === null || ip === null || potBb === null || stackBb === null) {
+  if (board === null && oop === null && ip === null && potBb === null && stackBb === null) {
     return { perm: null, cfg: null };
   }
+  if (board === null || oop === null || ip === null || potBb === null || stackBb === null) {
+    // 반쪽 설정은 해시를 재계산할 수 없다. 조용히 정규 보드로 떨어지면 사용자가
+    // "내 슈트로 답을 받았다" 고 오해한다.
+    throw badRequest('board, oop, ip, potBb, stackBb must be given together (or all omitted)');
+  }
+  const sizings = queryParam(url, 'sizings') ?? 'simple';
+  if (!isSizingPreset(sizings)) throw badRequest(`unknown sizings preset: ${sizings}`);
+  const rakePct = queryParam(url, 'rakePct');
+  const rakeCapBb = queryParam(url, 'rakeCapBb');
+  let cfg: CanonicalConfig;
   try {
-    const cfg = buildConfig({
+    cfg = buildConfig({
       board,
       oop,
       ip,
       potBb: Number(potBb),
       stackBb: Number(stackBb),
-      sizings: (queryParam(url, 'sizings') as 'simple' | null) ?? 'simple',
+      sizings: sizings as SizingPresetName,
+      compressed: queryParam(url, 'compressed') === '1',
+      ...(rakePct === null
+        ? {}
+        : { rake: { mode: 'pot' as const, pct: Number(rakePct), capBb: Number(rakeCapBb ?? '0') } }),
     });
-    return { perm: [...cfg.perm] as [number, number, number, number], cfg };
   } catch (e) {
     return toHttp(e);
   }
+  if (configHash(cfg) !== hash) {
+    throw new HttpError(
+      400,
+      'HashMismatch',
+      'the query config does not hash to this solve — it describes a different game',
+    );
+  }
+  return { perm: [...cfg.perm] as [number, number, number, number], cfg };
 }
 
 export function solveRoutes(deps: SolveDeps | null): Hono {
@@ -155,6 +186,19 @@ export function solveRoutes(deps: SolveDeps | null): Hono {
   }
 
   const { queue, cache, solver } = deps;
+
+  /**
+   * 재솔브(REPLACE)·삭제·LRU 축출로 `.bin` 이 바뀌기 **직전**에 조회 데몬이 들고 있는
+   * 결과를 버리게 한다 (R1 MAJOR 3: 낡은 전략을 계속 답했다). 여기서 거는 이유는
+   * 캐시를 만드는 곳과 솔버를 아는 곳이 다르기 때문이다 — 라우트가 둘 다 안다.
+   * 실패는 로그만 남긴다: 데몬이 이미 죽었어도 캐시 쓰기를 막을 이유가 없고,
+   * 데몬의 `(크기, mtime)` 재로드가 정답을 따로 보증한다.
+   */
+  cache.onInvalidate((hash) => {
+    void solver.invalidate(hash).catch((e: unknown) => {
+      console.error(`[ggto] unload ${hash} failed: ${e instanceof Error ? e.message : String(e)}`);
+    });
+  });
 
   app.post('/solve', async (c) => {
     const body = (await c.req.json().catch(() => {
@@ -218,7 +262,9 @@ export function solveRoutes(deps: SolveDeps | null): Hono {
           cache.evictFor(summary.bytes, queue.activeHashes());
           cache.commit({
             hash,
-            configJson: JSON.stringify({ board: formatCards(cfg.board), pot: cfg.potChips, stack: cfg.stackChips }),
+            // 정규 JSON 전체다 (P4.md 4.1 "재현·목록용"). 레인지가 없으면 행만으로
+            // 게임을 재현할 수 없다 — 해시의 입력이 곧 게임의 정의다.
+            configJson: canonicalConfigJson(cfg),
             boardCanonical: formatCards(cfg.board),
             street: cfg.board.length === 3 ? 'flop' : cfg.board.length === 4 ? 'turn' : 'river',
             potChips: cfg.potChips,
@@ -306,7 +352,7 @@ export function solveRoutes(deps: SolveDeps | null): Hono {
     const hash = c.req.param('hash');
     const row = cache.get(hash);
     if (row === null) throw new HttpError(404, 'NoSolve', `no solve result for ${hash}`);
-    const { perm, cfg } = permFor(c.req.url);
+    const { perm, cfg } = permFor(c.req.url, hash);
     const requested = queryParam(c.req.url, 'line') ?? '';
     try {
       assertCanonicalLine(requested);
@@ -320,9 +366,10 @@ export function solveRoutes(deps: SolveDeps | null): Hono {
       const node = await handle.node(canonicalLine);
       cache.touch(hash);
       const res: SolveNodeResponse = toNodeResponse(node, perm ?? [0, 1, 2, 3]);
-      // 역순열은 **슈트**를 되돌리지만 카드 **순서**는 정규 보드의 정렬 순서다.
-      // 사용자가 보낸 그대로를 돌려준다 (P4.md 2절).
-      if (cfg !== null) res.board = formatCards(cfg.boardOriginal);
+      // 역순열은 **슈트**를 되돌리지만 카드 **순서**는 정규 보드의 정렬 순서다. 사용자가
+      // 보낸 순서로 되돌리되 **라인에서 딜된 카드는 지운다** (R1 MAJOR 1: 통째로
+      // 덮어써서 `X-X/Qc` 의 턴 카드가 사라졌다).
+      if (cfg !== null) res.board = boardWithDealt(formatCards(cfg.boardOriginal), res.board);
       return c.json(res);
     } catch (e) {
       return toHttp(e);
@@ -333,7 +380,7 @@ export function solveRoutes(deps: SolveDeps | null): Hono {
     const hash = c.req.param('hash');
     const row = cache.get(hash);
     if (row === null) throw new HttpError(404, 'NoSolve', `no solve result for ${hash}`);
-    const { perm, cfg } = permFor(c.req.url);
+    const { perm, cfg } = permFor(c.req.url, hash);
     const requested = queryParam(c.req.url, 'line') ?? '';
     try {
       assertCanonicalLine(requested);
@@ -345,8 +392,8 @@ export function solveRoutes(deps: SolveDeps | null): Hono {
       const handle = await solver.open(hash, cache.binPath(hash));
       const runouts = await handle.runouts(canonicalLine);
       cache.touch(hash);
-      const res: SolveRunoutsResponse = toRunoutsResponse(runouts, perm ?? [0, 1, 2, 3], row.boardCanonical);
-      if (cfg !== null) res.board = formatCards(cfg.boardOriginal);
+      const res: SolveRunoutsResponse = toRunoutsResponse(runouts, perm ?? [0, 1, 2, 3]);
+      if (cfg !== null) res.board = boardWithDealt(formatCards(cfg.boardOriginal), res.board);
       return c.json(res);
     } catch (e) {
       return toHttp(e);

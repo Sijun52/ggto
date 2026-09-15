@@ -84,6 +84,8 @@ export class JobQueue {
   #queue: Job[] = [];
   #running = new Set<Job>();
   #seq = 0;
+  /** `#pump` 재진입 가드 (아래 설명) */
+  #pumping = false;
 
   constructor(opts: JobQueueOptions) {
     this.#solver = opts.solver;
@@ -240,15 +242,35 @@ export class JobQueue {
     this.#pump();
   }
 
+  /**
+   * 슬롯과 메모리가 허락하는 **한 계속** 뽑는다.
+   *
+   * 한 번에 하나만 시작하면 큰 잡이 끝난 뒤 슬롯 하나가 논다 (R1 MAJOR 4 실측:
+   * 7.5GB 잡 종료 후 1GB 둘 중 하나만 `running`). 전이는 종료 한 번에 여러 잡을
+   * 풀어 줄 수 있으므로 루프여야 한다.
+   *
+   * 재진입 가드: `#run` 은 첫 await 전에 동기로 실패할 수 있고 그러면 `#finish` →
+   * `#pump` 가 이 루프 안에서 다시 돈다. 바깥 루프가 어차피 계속 돌므로 안쪽은 즉시
+   * 돌아간다 (같은 잡을 두 번 시작하지 않는다).
+   */
   #pump(): void {
-    if (this.#running.size >= this.#concurrency) return;
-    // 큐의 앞에서부터 **메모리가 맞는 첫 잡**을 고른다. 머리 하나가 크다고 뒤를 전부
-    // 굶기면 작은 잡이 영원히 못 돈다 (head-of-line blocking).
-    const idx = this.#queue.findIndex((j) => j.estimate === null || this.runningMemoryBytes() + j.memoryBytes <= this.#memoryCap);
-    if (idx < 0) return;
-    const job = this.#queue.splice(idx, 1)[0] as Job;
-    this.#running.add(job);
-    void this.#run(job);
+    if (this.#pumping) return;
+    this.#pumping = true;
+    try {
+      while (this.#running.size < this.#concurrency) {
+        // 큐의 앞에서부터 **메모리가 맞는 첫 잡**을 고른다. 머리 하나가 크다고 뒤를 전부
+        // 굶기면 작은 잡이 영원히 못 돈다 (head-of-line blocking).
+        const idx = this.#queue.findIndex(
+          (j) => j.estimate === null || this.runningMemoryBytes() + j.memoryBytes <= this.#memoryCap,
+        );
+        if (idx < 0) return;
+        const job = this.#queue.splice(idx, 1)[0] as Job;
+        this.#running.add(job);
+        void this.#run(job);
+      }
+    } finally {
+      this.#pumping = false;
+    }
   }
 
   async #run(job: Job): Promise<void> {

@@ -107,9 +107,12 @@ pub struct Range { weights: [f32; 1326] }
 ### 3.3 액션 시퀀스 (프리플랍/포스트플랍 공통 키)
 사람이 읽을 수 있고 파일명으로도 쓸 수 있는 정규 문자열로 고정한다.
 ```
-프리플랍:  "F.F.R2.5.F.F.C3R11.C"   → 포지션 순서대로 . 구분
-포스트플랍: "b33.c/b75.r225.c/x.x"  → / 가 스트리트 구분
+프리플랍:  "F-F-R2.5-F-F-C"       → 액션 구분자 '-'
+포스트플랍: "B6.6-C/Qc/X-B15"       → / 가 스트리트 구분, 카드 세그먼트 = 그 스트리트에 깔린 카드
 ```
+액션 토큰은 `F`·`X`·`C`·`A`·`B<bb>`·`R<bb>` 이고 금액 단위는 bb 다 (D3·D10).
+**구분자는 `.` 이 아니라 `-` 다**: 포스트플랍 금액은 `B6.6` 처럼 소수를 가지므로 `.` 로 쪼개면
+토크나이즈가 깨진다 (phase-minus1 CRITICAL 1, P4 R1 에서 스펙 예시를 이 문법으로 정정).
 파서/포매터는 `ggto-core`에 두고 프리플랍·포스트플랍·트레이너가 전부 이걸 쓴다. **이 문자열이 캐시 키이자 URL 파라미터이자 DB 컬럼이다.**
 
 ### 3.4 보드 동형 정규화 (캐시 적중률의 핵심)
@@ -141,7 +144,7 @@ CREATE TABLE chart_set (
 CREATE TABLE pf_node (
   id INTEGER PRIMARY KEY,
   chart_set_id INTEGER REFERENCES chart_set(id),
-  action_seq TEXT NOT NULL,     -- "F.F.R2.5" (여기까지 진행된 상태)
+  action_seq TEXT NOT NULL,     -- "F-F-R2.5" (여기까지 진행된 상태, 3.3 문법)
   hero_pos INTEGER NOT NULL,    -- 액션 차례인 포지션
   pot_bb REAL,
   actions TEXT NOT NULL,        -- JSON: ["F","C","R7.5","R22","AI"]
@@ -270,13 +273,14 @@ EV 채점과 빈도 채점을 구분하지 못했다. 구현된 스키마는 P3.
 # 프리플랍
 GET  /api/charts                              → 차트셋 목록
 GET  /api/charts/{set}/tree                   → 액션 트리 구조
-GET  /api/charts/{set}/node?seq=F.F.R2.5      → 전략/EV 블롭
+GET  /api/charts/{set}/node?seq=F-F-R2.5      → 전략/EV 블롭 (3.3 문법)
 
 # 포스트플랍
 POST /api/solve                               → {job_id, cached: bool, est_memory, est_secs}
 GET  /api/solve/{job_id}/events               → SSE: {iter, exploitability, pct}
 DELETE /api/solve/{job_id}                    → 취소
-GET  /api/solve/{hash}/node?line=b33.c/b75    → 노드 전략/EV/레인지
+GET  /api/solve/{hash}/node?line=B6.6-C/Qc&board=…&oop=…&ip=…&potBb=…&stackBb=…
+                                              → 노드 전략/EV/레인지 (설정 쿼리는 해시와 대조된다 — 불일치 400)
 GET  /api/solve/{hash}/runouts?line=...       → 런아웃 히트맵
 GET  /api/solves                              → 캐시된 솔브 목록
 
