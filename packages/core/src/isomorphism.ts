@@ -11,7 +11,7 @@
  */
 
 import { CardSyntaxError, type Card } from './card.js';
-import { COMBO_COUNT } from './combo.js';
+import { COMBO_COUNT, comboHi, comboIndex, comboLo } from './combo.js';
 import { permuteRangeSuits, type Range } from './range/range.js';
 import { ALL_SUIT_PERMS, IDENTITY_PERM, applyPermToCard, type SuitPerm } from './suitPerm.js';
 
@@ -91,22 +91,57 @@ export function canonicalBoard(board: readonly Card[]): { board: Card[]; perm: S
 }
 
 /** 모든 레인지를 불변으로 두는 슈트 순열의 부분군. 항등 순열은 항상 포함된다. */
+/**
+ * 순열 p 에 대한 콤보 인덱스 사상표. `MAP[p][i] = comboIndex(p(hi_i), p(lo_i))`.
+ *
+ * 24 × 1326 × 2B = 63KB 를 한 번 만들고 계속 쓴다. 이 표가 없으면 stabilizer 검사가
+ * 콤보마다 `applyPermToCard` 2회 + `comboIndex`(범위 검사 포함)를 다시 하고, 그것이
+ * `buildConfig` 비용의 대부분이 된다 (P4 벤치 실측).
+ */
+let PERM_COMBO_MAP: Uint16Array[] | null = null;
+
+function permComboMap(): Uint16Array[] {
+  if (PERM_COMBO_MAP !== null) return PERM_COMBO_MAP;
+  const maps: Uint16Array[] = [];
+  for (const perm of PERMS) {
+    const m = new Uint16Array(COMBO_COUNT);
+    for (let i = 0; i < COMBO_COUNT; i++) {
+      const a = applyPermToCard(comboHi(i), perm);
+      const b = applyPermToCard(comboLo(i), perm);
+      const hi = a > b ? a : b;
+      const lo = a > b ? b : a;
+      m[i] = (hi * (hi - 1)) / 2 + lo;
+    }
+    maps.push(m);
+  }
+  PERM_COMBO_MAP = maps;
+  return maps;
+}
+
+/**
+ * 모든 레인지를 불변으로 두는 슈트 순열의 부분군. 항등 순열은 항상 포함된다.
+ *
+ * `r` 이 순열 불변이라는 것은 `∀i: r[p(i)] === r[i]` 다. 예전 구현은 `permuteRangeSuits` 로
+ * 1326 배열을 **만든 뒤** 비교해서 순열마다 5KB 를 할당했고 (24 × 레인지 수), 첫 불일치를
+ * 보기 전에 배열 전체를 채웠다. 사상표를 쓰면 할당이 0 이고 불일치에서 바로 빠진다.
+ */
 export function suitStabilizer(ranges: readonly Range[], eps = 1e-6): SuitPerm[] {
   if (ranges.length === 0) return PERMS.slice();
+  const maps = permComboMap();
   const out: SuitPerm[] = [];
-  for (const perm of PERMS) {
+  for (let p = 0; p < PERMS.length; p++) {
+    const map = maps[p] as Uint16Array;
     let ok = true;
     for (const r of ranges) {
-      const p = permuteRangeSuits(r, perm);
       for (let i = 0; i < COMBO_COUNT; i++) {
-        if (Math.abs((p[i] as number) - (r[i] as number)) > eps) {
+        if (Math.abs((r[map[i] as number] as number) - (r[i] as number)) > eps) {
           ok = false;
           break;
         }
       }
       if (!ok) break;
     }
-    if (ok) out.push(perm);
+    if (ok) out.push(PERMS[p] as SuitPerm);
   }
   return out;
 }

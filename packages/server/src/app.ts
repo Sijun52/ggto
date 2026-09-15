@@ -8,6 +8,7 @@ import type { TrainerService } from '@ggto/trainer';
 import { Hono } from 'hono';
 import { HttpError, mapError, notFound } from './errors.js';
 import { chartRoutes } from './routes/charts.js';
+import { solveRoutes, type SolveDeps } from './routes/solve.js';
 import { healthRoutes } from './routes/health.js';
 import { rangeRoutes } from './routes/range.js';
 import { trainerRoutes } from './routes/trainer.js';
@@ -31,6 +32,11 @@ export interface AppOptions {
    * 이 아니다 (세션을 만들 수 없는 것은 장애다).
    */
   trainer?: TrainerService | null;
+  /**
+   * 솔버 (P4). null 이면 `/api/solve*` 만 503 `SolverUnavailable` 이고 P2/P3 는 그대로다
+   * (D24 — 솔버는 옵션 기능이고 앱 기동을 막지 않는다).
+   */
+  solve?: SolveDeps | null;
   /** 에러 로그 스로틀의 시계 (테스트 주입). 기본 `Date.now` */
   now?: () => number;
 }
@@ -80,6 +86,7 @@ export function createApp(opts: AppOptions = {}): Hono {
   app.route('/api', rangeRoutes());
   app.route('/api', chartRoutes(opts.repo ?? null));
   app.route('/api', trainerRoutes(opts.trainer ?? null));
+  app.route('/api', solveRoutes(opts.solve ?? null));
 
   if (opts.testRoutes === true) {
     app.get('/api/__boom', () => {

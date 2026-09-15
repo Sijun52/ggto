@@ -9,3 +9,6 @@ bash.exe.stackdump
 
 # check:mobile / check:desktop 기본 출력 (--publish 없이는 여기로)
 /tools/shots/out/
+
+# Rust 빌드 산출물 (P4)
+/solver/ggto-solver-cli/target/

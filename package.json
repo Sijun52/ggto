@@ -8,7 +8,7 @@
     "tools/*"
   ],
   "scripts": {
-    "build:libs": "npm run build -w @ggto/core -w @ggto/protocol -w @ggto/preflop -w @ggto/trainer",
+    "build:libs": "npm run build -w @ggto/core -w @ggto/protocol -w @ggto/preflop -w @ggto/trainer -w @ggto/solver",
     "build:tools": "npm run build -w @ggto/chart-gen -w @ggto/chart-import",
     "typecheck": "npm run build:libs && npm run typecheck --workspaces --if-present",
     "prepare": "npm run build:libs",
@@ -31,7 +31,12 @@
     "dev:web": "npm run dev -w @ggto/web",
     "ci": "npm run typecheck && npm run test && npm run build && npm run bench && npm run smoke",
     "check:mobile": "node tools/shots/mobile.mjs",
-    "check:desktop": "node tools/shots/desktop.mjs"
+    "check:desktop": "node tools/shots/desktop.mjs",
+    "build:solver": "node scripts/build-solver.mjs",
+    "test:solver": "node scripts/test-solver.mjs",
+    "ci:solver": "npm run build:solver && npm run test:solver && npm run bench:solver",
+    "solve": "node tools/solve/main.mjs",
+    "bench:solver": "node packages/solver/bench/integration.mjs"
   },
   "engines": {
     "node": ">=24"

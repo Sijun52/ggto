@@ -84,7 +84,7 @@ const cases = [
   },
 ];
 
-runCases(cases, {
+await runCases(cases, {
   suite: '@ggto/core',
   // 이 스위트의 예산은 유휴 기준값 대비 3~10배로 잡혀 있다 (P0 5절). 규모 회귀 탐지용이지
   // 수 % 의 성능 변화를 보는 도구가 아니다.

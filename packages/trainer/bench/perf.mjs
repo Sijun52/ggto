@@ -151,7 +151,7 @@ const cases = [
   },
 ];
 
-runCases(cases, {
+await runCases(cases, {
   suite: '@ggto/trainer',
   teardown: () => {
     trainer.close();

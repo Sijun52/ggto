@@ -43,7 +43,7 @@
   <text class="lbl" x="504" y="70">ggto-solver-cli --solve (잡당 프로세스 1, 최대 2)</text>
   <text class="xs mono" x="504" y="90">stdin:  {"id":1,"method":"solve","params":{config…}}</text>
   <text class="xs mono" x="504" y="106">stdout: {"method":"progress","params":{iter,expl,pct}} …</text>
-  <text class="xs mono" x="504" y="122">        {"id":1,"result":{iterations,exploitability,path}}</text>
+  <text class="xs mono" x="504" y="122">        {"id":1,"result":{iterations,exploitabilityPct,elapsedMs,bytes}}</text>
   <text class="xs" x="504" y="144">완료 시 data/solves/{hash}.bin 저장 후 exit 0</text>
   <text class="xs" x="504" y="160">취소 = stdin close → 2s → kill. 메모리는 프로세스와 함께 사라진다</text>
   <text class="xs" x="504" y="180" fill="#991b1b">postflop-solver 9d1509fe · bincode rc.3 핀 Cargo.lock · --locked</text>
@@ -53,7 +53,7 @@
   <text class="xs mono" x="504" y="264">load {hash,path} → 결과를 메모리에 (LRU, 합 ≤ 2GB)</text>
   <text class="xs mono" x="504" y="280">node {hash,line} → strategy/ev f32[actions][1326] (base64)</text>
   <text class="xs mono" x="504" y="296">runouts {hash,line} → 49장 × {ev, equity, strategy 집계}</text>
-  <text class="xs" x="504" y="318">line 은 core 의 액션 시퀀스 문자열 (b33.c/b75) — 정규형만 받는다</text>
+  <text class="xs" x="504" y="318">line 은 core 의 액션 시퀀스 문자열 (B6.6-C/Qc — 구분자 - 와 /, D3) — 정규형만</text>
   <text class="xs" x="504" y="334">1326 배열은 정규 보드 기준. Node 가 SuitMap 역순열로 원본 슈트로 되돌린다 (D5·D6)</text>
   <text class="xs" x="504" y="356">죽으면 클라이언트가 재기동 · 로드 상태는 idempotent 재로드</text>
 

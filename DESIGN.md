@@ -56,14 +56,16 @@ GGTO/
 │  ├─ server/                 # @ggto/server — Hono 라우터, 정적 서빙, 진입점 (P1)
 │  ├─ preflop/                # @ggto/preflop — 스키마·ChartRepository·ggto-json·reach (P2)
 │  ├─ trainer/                # @ggto/trainer — 스팟·채점·SRS (P3)
-│  └─ solver/                 # @ggto/solver — Solver 인터페이스, 데몬 클라이언트, 캐시 (P4)
-├─ solver/ggto-solver-cli/    # Rust 크레이트. 레포 안의 유일한 비-TS 코드 (P4)
+│  └─ solver/                 # @ggto/solver — Solver 인터페이스, 데몬 클라이언트, 잡 큐, 캐시 (P4, 구현됨)
+├─ solver/ggto-solver-cli/    # Rust 크레이트 (AGPL-3.0-or-later). 레포 안의 유일한 비-TS 코드 (P4, 구현됨)
+│                            #   Cargo.lock 커밋 (bincode rc.3 핀) · .cargo/config.toml 린트 우회 · rust-toolchain 1.98.1
 ├─ web/                       # Vite + React
 ├─ tools/
 │  ├─ chart-import/           # ggto-json → SQLite CLI (P2)
 │  ├─ chart-gen/              # 자체 생성 시드 차트 (P2)
-│  └─ shots/                  # headless Chrome 레이아웃 검사·스크린샷 (P3M, ci 밖)
-├─ scripts/                   # start-lan 등 운영 스크립트 (P3M)
+│  ├─ shots/                  # headless Chrome 레이아웃 검사·스크린샷 (P3M, ci 밖)
+│  └─ solve/                  # npm run solve — 서버 없이 큐·캐시를 직접 쓰는 CLI (P4)
+├─ scripts/                   # start-lan · build-solver · solver-gate · test-solver (P3M/P4)
 ├─ data/                      # gitignore. DB + 차트 원본 + 솔브 캐시
 ├─ docs/specs/P*.md           # 페이즈별 정본 스펙
 └─ docs/reviews/              # 리뷰 판정
@@ -71,6 +73,9 @@ GGTO/
 
 ### 계층 규칙 (grep 으로 검사)
 - `core` 는 UI/DB/HTTP/파일을 모른다. 런타임 의존성 0. `core/internal` 은 누구도 import 하지 않는다.
+- **`child_process` 를 import 하는 곳은 `packages/solver/src/daemon/*` 뿐이다** (`scripts/`·`tools/`·테스트는 예외). 서버는 `Solver`·`JobQueue`·`SolveCache` 인터페이스만 본다 (P4).
+- **솔버 크레이트 이름(`postflop-solver`)은 `packages/solver/src/daemon/postflopCli.ts` 한 파일에만 있다.** 도메인 패키지·웹에는 없다 (P4).
+- EV 컨테이너는 `Float32Array` 뿐이다 (D7). `Float64Array`·f16 금지.
 - 계산은 1326, 표시는 169. 169 인덱스를 입력으로 받아 **계산**하는 함수는 어디에도 없다.
 - 서버에 SQL 없음 (저장소 패키지만). 웹은 `core`/`protocol` 만 import. 솔버는 `Solver` 인터페이스 뒤.
 - 액션 시퀀스 문자열(3.3) 이 캐시 키·URL·DB 컬럼이다. 파서/포매터는 core 하나뿐.
@@ -171,27 +176,37 @@ CREATE INDEX idx_pf_lookup ON pf_node(chart_set_id, action_seq);
 ### 5.2 리소스 관리 (여기가 실패 지점 1번)
 | 항목 | 설계 |
 |---|---|
-| 메모리 | `postflop-solver`의 **압축 모드(f16)** 기본 사용. 플랍부터 풀트리는 수 GB → 베팅 사이즈 프리셋을 2~3개로 제한하는 게 UX상 정답 |
+| 메모리 | **비압축 f32 기본** (D7). `postflop-solver` 의 압축 모드는 IEEE f16 이 아니라 **i16 고정소수점**이고, 명시 옵션(`compressed: true`)이며 **캐시 해시에 포함**된다 (다른 결과다). 플랍부터 풀트리는 수 GB → 베팅 사이즈 프리셋을 2~3개로 제한하는 게 UX상 정답 (P4.md 3.2·3.4) |
 | 사전 추정 | 트리 빌드 후 `memory_usage()` 로 필요 메모리 계산 → **솔브 전에 UI에 "예상 메모리 2.1GB / 예상 시간 ~40초" 표시하고 확인받음** |
-| 동시성 | 세마포어 2개. 3번째 잡은 큐 대기 (로컬 PC는 RAM이 병목) |
+| 동시성 | 동시 2 잡. 3번째는 큐 대기. **세마포어만으로는 OOM 을 못 막으므로** `estimate` 가 준 필요량의 합이 8GB (`GGTO_SOLVE_MEMORY_BYTES`) 를 넘으면 시작하지 않고, 단일 잡이 상한을 넘으면 즉시 `TooLarge` 다 (P4.md 5.2) |
 | 캐시 축출 | LRU. `data/solves/` 총량 상한(기본 20GB) 초과 시 오래된 것부터 삭제 |
-| 취소 | `solve_step` 루프에서 `CancellationToken` 확인 |
+| 취소 | `solve_step` 경계에서 stdin 의 `cancel` 을 확인 → `Cancelled` 응답 후 exit. 응답이 없으면 클라이언트가 stdin close → 2s → kill (D22). 취소된 잡은 `.part` 를 남기지 않는다 |
 
 ### 5.3 결과 조회 API (전체를 프론트로 보내지 않는다)
 솔브 결과는 GB 단위다. **노드 단위 lazy 조회**가 필수.
+`line` 문법은 `@ggto/core` 의 액션 문자열 그대로다 (D3): 액션 구분자 `-`, 스트리트 구분자 `/`,
+카드 세그먼트는 그 스트리트에 깔린 카드. 금액 단위는 bb (`B6.6` = 6.6bb 벳).
+
 ```
-GET /api/solve/{hash}/node?line=b33.c/b75
+GET /api/solve/{hash}/node?line=B6.6-C/Qc&board=Ks7h2h&oop=…&ip=…&potBb=20&stackBb=80
 → {
     street: "turn",
-    pot: 21.5, stacks: [89.2, 89.2],
-    actions: ["Check", "Bet 16", "Bet 43"],
-    strategy: <base64 f16[3][1326]>,     // 압축해서 ~8KB
-    ev:       <base64 f16[3][1326]>,
-    ranges:   [<oop 1326>, <ip 1326>],
-    equity:   {oop: 0.54, ip: 0.46},
-    aggregate: { /* 169 격자용 사전 집계 */ }
+    line: "B6.6-C/Qc", board: "Ks7h2hQc",   // 보드는 항상 **사용자가 보낸 원본 슈트**
+    player: "oop",
+    potChips: 3320, stacksChips: [8920, 8920],
+    actions: ["X", "B6.6", "B15"],          // core formatAction
+    strategy: <base64 f32[3][1326]>,        // ~16KB
+    ev:       <base64 f32[3][1326]>,        // bb, stack_delta_from_node
+    reach:    [<base64 f32[1326]>, <…>],
+    equity:   [<base64 f32[1326]>, <…>],
+    evAvgBb:  [13.74, 6.26],                // 합 = potChips/100 (P4.md 3.5)
+    aggregate: { strategy: number[3][169], ev: …, reach: number[2][169] },
+    evBasis: "stack_delta_from_node"
   }
 ```
+
+**base64 는 전부 f32 little-endian 이다** (D7). 슈트 역순열은 `@ggto/solver` 가 응답을 만들 때
+한 번에 한다 — 서버·웹은 정규 보드를 모른다 (P4.md 2절).
 프론트는 이걸 받아서 격자를 그린다. 노드 이동 시마다 요청 + TanStack Query 캐시.
 
 ### 5.4 UI
@@ -287,7 +302,7 @@ POST /api/range/equity         {ranges, board}       → 에퀴티/에퀴티 분
 | **P2** | 프리플랍: 스키마 + 임포터 CLI + 차트 뷰어 | **첫 실사용 가능 기능** | 중 |
 | **P3** | 트레이너 v1 (프리플랍 전용): 출제/채점/리포트 + **SRS·리크 분석** | 매일 쓸 수 있는 앱이 됨 | 중 |
 | **P3M** | 모바일 UX: 반응형 격자 + 터치 타겟 44px + 하단 액션 바 + 리포트 카드 + `GGTO_HOST` LAN opt-in | 휴대폰으로 20문제를 한 손으로 돈다. 완료 조건: `npm run check:mobile` exit 0 | 소 |
-| **P4** | `ggto-solver`: postflop-solver 래핑 + 잡큐 + 캐시 + SSE | CLI로 솔브 돌아감 | 대 |
+| **P4** | `ggto-solver`: postflop-solver 래핑 + 잡큐 + 캐시 + SSE | CLI로 솔브 돌아감. **완료 조건: `npm run ci` exit 0 (Rust 없이) 그리고 `npm run ci:solver` exit 0** | 대 |
 | **P5** | 포스트플랍 탐색 UI: 액션 트리 + 격자 + 런아웃 히트맵 | | 대 |
 | **P6** | 트레이너 v2: **포스트플랍 스팟** (SRS·리크 분석은 P3 에서 앞당겼다) | | 중 |
 | **P7+** | 핸드히스토리 임포트 → 자동 리뷰 (선택) | | 대 |
@@ -300,11 +315,11 @@ POST /api/range/equity         {ranges, board}       → 에퀴티/에퀴티 분
 
 | 리스크 | 대응 |
 |---|---|
-| **포스트플랍 솔브 메모리 폭발** | 베팅 사이즈 프리셋 제한 + 솔브 전 메모리 추정 표시 + f16 압축 모드 |
+| **포스트플랍 솔브 메모리 폭발** | 베팅 사이즈 프리셋 제한 + 솔브 전 `memory_usage()` 추정 표시·확인 + 합산 8GB 게이트 + 잡당 별도 프로세스(끝나면 메모리 반납) |
 | **솔브 시간이 UX를 죽임** | 캐시 우선 + 보드 동형 정규화 + 백그라운드 잡 + 미리 자주 쓰는 스팟 배치 솔브 |
 | **프리플랍 차트 데이터 부재** | 오픈 차트 임포트로 시작. 출처를 DB에 강제 기록. 상용 서비스 스크래핑 금지 |
 | **169 격자 렌더 성능** | Canvas 렌더 + 전략 블롭을 Web Worker에서 디코드 |
-| **f16 정밀도 손실로 채점 오류** | EV loss 임계값을 f16 오차(~0.001bb)보다 훨씬 크게(0.05bb) 잡음 |
+| **정밀도 손실로 채점 오류** | EV 는 어디서나 **f32 전송** (D7). f16 의 ULP 는 64~128bb 구간에서 0.0625bb 로 채점 임계 0.05bb 와 같은 크기라 금지다 |
 | **솔버 크레이트에 종속** | `trait Solver`로 추상화. 나중에 자체 CFR 엔진으로 교체 가능한 경계 유지 |
 
 ---

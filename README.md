@@ -36,11 +36,40 @@ npm start          # http://localhost:7777
 `data/` 는 gitignore 대상이라 클론 직후에는 비어 있다. `npm run seed` 가 CFR+ 로 차트를 다시 풀어서 채운다 — 결정적이라 어느 머신에서 돌려도 `content_hash` 가 같다.
 
 ```bash
-npm run ci            # typecheck → test → build → bench → smoke
+npm run ci            # typecheck → test → build → bench → smoke  (Rust 없이도 exit 0)
 npm run bench:strict  # 성능 예산 강제 (유휴 머신에서만 의미 있음)
 npm run check:mobile  # 375x812 실제 레이아웃 검사 + 스크린샷 (Chrome 필요, ci 밖)
 npm run check:desktop # 1280x720 / 1500x1000 회귀 게이트
 ```
+
+### 포스트플랍 솔버 (P4, 선택)
+
+솔버는 **옵션**이다. Rust 툴체인이 없으면 `/api/solve*` 만 503 이고 뷰어·트레이너는 그대로 돈다 (D24).
+
+```bash
+# 1) rustup GNU 호스트 (MSVC 불필요 — rust-mingw 가 링커를 번들한다)
+curl -sSL -o rustup-init.exe https://static.rust-lang.org/rustup/dist/x86_64-pc-windows-gnu/rustup-init.exe
+./rustup-init.exe -y --default-host x86_64-pc-windows-gnu --profile minimal --default-toolchain 1.98.1
+
+npm run build:solver  # windows-sys 게이트 → cargo build --locked --release
+npm run ci:solver     # build:solver → cargo test + 통합 테스트 → 데몬 벤치
+```
+
+`cargo` 가 PATH 에 없으면 `~/.cargo/bin` 을 자동으로 본다 (`GGTO_CARGO` 로 지정도 가능).
+
+```bash
+npm run solve -- --board Ks7h2h --oop "22+,A2s+,K9s+,QTs+,ATo+,KJo+"                  --ip "TT-22,AJs-A2s,KTs+,QJs,AQo-ATo" --pot 20 --stack 80                  --sizings simple --target 0.5 --yes --line ""
+```
+
+같은 명령을 다시 치면 연산 없이 `cached` 다. 보드를 `Kd7s2s` 로 바꿔도 **같은 해시**로 히트한다
+(슈트 동형 정규화, D5·D6). `--line` 의 문법은 core 액션 문자열이다 (`B6.6-C/Qc`, D3).
+
+| 환경변수 | 기본 | 뜻 |
+|---|---|---|
+| `GGTO_SOLVER_BIN` | `solver/ggto-solver-cli/target/release/ggto-solver-cli(.exe)` | 솔버 바이너리 |
+| `GGTO_SOLVE_MEMORY_BYTES` | 8GB | 동시 실행 잡의 **예상 메모리 합** 상한 |
+| `GGTO_SOLVE_CACHE_BYTES` | 20GB | `data/solves/` 총량 (넘으면 LRU 축출) |
+| `GGTO_SOLVER_LOADED_BYTES` | 2GB | 조회 데몬이 메모리에 올려 두는 결과의 합 |
 
 ### 휴대폰에서 쓰기
 

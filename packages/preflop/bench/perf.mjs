@@ -96,7 +96,7 @@ cases.push(
   },
 );
 
-runCases(cases, {
+await runCases(cases, {
   suite: '@ggto/preflop',
   teardown: () => {
     repo.close();

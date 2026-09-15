@@ -13,6 +13,14 @@
 import { serve } from '@hono/node-server';
 import { openRepository } from '@ggto/preflop';
 import { openTrainer } from '@ggto/trainer';
+import {
+  DEFAULT_CACHE_BYTES,
+  DEFAULT_MEMORY_BYTES,
+  JobQueue,
+  PostflopSolverCli,
+  SolveCache,
+  resolveBin,
+} from '@ggto/solver';
 import { existsSync, mkdirSync } from 'node:fs';
 import { networkInterfaces } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -87,7 +95,43 @@ const repo = openRepository(join(dataDir, 'ggto.db'));
 // 기록은 `ggto.db` 와 **별도 파일**이다 (D16): `ggto.db` 는 `npm run seed` 로 재생성되는
 // 산출물이고 트레이너 기록은 지워지면 안 되는 사용자 데이터라 수명이 다르다.
 const trainer = openTrainer({ chartRepo: repo, dbPath: join(dataDir, 'trainer.db') });
-const app = createApp({ webDist, repo, trainer });
+
+/**
+ * 솔버 (P4 / D24). 바이너리가 없으면 `/api/solve*` 만 503 이고 나머지는 그대로다 —
+ * Rust 툴체인이 없는 PC 에서도 앱은 뜬다. **데몬은 부팅 시 띄우지 않는다** (P4.md 5.1):
+ * 첫 조회 요청이 띄운다.
+ */
+function openSolver(): { solver: PostflopSolverCli; queue: JobQueue; cache: SolveCache } | null {
+  const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
+  const bin = resolveBin(repoRoot);
+  if (bin === null) return null;
+  const solver = new PostflopSolverCli({ bin });
+  const cache = new SolveCache({
+    dir: join(dataDir, 'solves'),
+    capBytes: envBytes('GGTO_SOLVE_CACHE_BYTES', DEFAULT_CACHE_BYTES),
+  });
+  // 기동 정리는 여기서만 한다 (P4.md 7절). 데몬은 안 띄운다.
+  const report = cache.repair();
+  const cleaned = report.partsRemoved.length + report.orphanBinsRemoved.length + report.orphanRowsRemoved.length;
+  if (cleaned > 0) {
+    console.log(
+      `[ggto] solve cache repair: .part ${String(report.partsRemoved.length)} · orphan .bin ${String(report.orphanBinsRemoved.length)} · orphan rows ${String(report.orphanRowsRemoved.length)}`,
+    );
+  }
+  const queue = new JobQueue({ solver, memoryBytes: envBytes('GGTO_SOLVE_MEMORY_BYTES', DEFAULT_MEMORY_BYTES) });
+  return { solver, queue, cache };
+}
+
+function envBytes(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (raw === undefined || raw.length === 0) return fallback;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) throw new Error(`${name} must be a positive number of bytes, got ${JSON.stringify(raw)}`);
+  return n;
+}
+
+const solve = openSolver();
+const app = createApp({ webDist, repo, trainer, solve });
 
 // 바인드 **전에** 대역을 판정한다. 거부는 exit 1 — 열린 뒤에 경고해 봐야 늦다.
 const decision = decideBind({ host, addrs: interfaceAddrs(), allowPublic: allowPublic() });
@@ -128,4 +172,19 @@ serve({ fetch: app.fetch, port: resolvePort(), hostname: host }, (info) => {
   console.log(`[ggto] web dist: ${webDist ?? '(not built — run npm run build)'}`);
   console.log(`[ggto] data dir: ${dataDir}`);
   console.log(`[ggto] trainer db: ${join(dataDir, 'trainer.db')}`);
+  console.log(
+    solve === null
+      ? '[ggto] solver: (not built — npm run build:solver). /api/solve is 503, everything else works'
+      : `[ggto] solver: ${solve.solver.id} · cache ${join(dataDir, 'solves')} · memory cap ${String(Math.round(solve.queue.memoryCap / 1024 ** 3))}GB`,
+  );
 });
+
+// 상주 조회 데몬을 남기지 않는다 (P3M R2 MINOR 6 의 교훈: 잔여 프로세스는 낡은 빌드를 검사하게 만든다).
+for (const sig of ['SIGINT', 'SIGTERM'] as const) {
+  process.on(sig, () => {
+    void (async (): Promise<void> => {
+      if (solve !== null) await solve.solver.shutdown();
+      process.exit(0);
+    })();
+  });
+}

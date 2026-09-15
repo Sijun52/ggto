@@ -72,12 +72,17 @@ export function sampleLoad(from = SPAN_START) {
  * best-of-N: JIT 워밍업과 GC 노이즈를 걷어내고 하한을 본다.
  * 최솟값이 "예산 안에 들어갈 수 있는가" 라는 질문에 맞는 통계량이다 (R3: runs 3 → 5).
  */
-export function measure(fn, { warmup = 2, runs = 5 } = {}) {
-  for (let i = 0; i < warmup; i++) fn();
+/**
+ * `fn` 이 Promise 를 돌려주면 **기다린다** (P4: 데몬 왕복은 비동기다).
+ * 동기 케이스의 의미는 그대로다 — `await` 는 이미 이행된 값에 microtask 하나를 더할 뿐이다.
+ * 기다리지 않으면 비동기 케이스가 항상 ~0ms 로 측정돼 예산 게이트가 무의미해진다.
+ */
+export async function measure(fn, { warmup = 2, runs = 5 } = {}) {
+  for (let i = 0; i < warmup; i++) await fn();
   let best = Infinity;
   for (let i = 0; i < runs; i++) {
     const t0 = performance.now();
-    fn();
+    await fn();
     const ms = performance.now() - t0;
     if (ms < best) best = ms;
   }
@@ -87,10 +92,10 @@ export function measure(fn, { warmup = 2, runs = 5 } = {}) {
 /**
  * 케이스 목록을 돌리고 JSON(stdout) + 사람용 줄(stderr) 을 찍은 뒤 exit 코드를 정한다.
  *
- * @param {{name: string, budgetMs: number, run: () => unknown, check?: (v: unknown) => true | string, warmup?: number, runs?: number}[]} cases
- * @param {{ suite: string, argv?: string[], gateNote?: string, teardown?: () => void }} opts
+ * @param {{name: string, budgetMs: number, run: () => unknown | Promise<unknown>, check?: (v: unknown) => true | string, warmup?: number, runs?: number}[]} cases
+ * @param {{ suite: string, argv?: string[], gateNote?: string, teardown?: () => void | Promise<void> }} opts
  */
-export function runCases(cases, { suite, argv = process.argv.slice(2), gateNote, teardown } = {}) {
+export async function runCases(cases, { suite, argv = process.argv.slice(2), gateNote, teardown } = {}) {
   const strict = argv.includes('--strict');
 
   const results = [];
@@ -98,9 +103,9 @@ export function runCases(cases, { suite, argv = process.argv.slice(2), gateNote,
   let over = 0; // 예산 초과 — 부하에 따라 집행
   for (const c of cases) {
     let value;
-    const ms = measure(
-      () => {
-        value = c.run();
+    const ms = await measure(
+      async () => {
+        value = await c.run();
       },
       { warmup: c.warmup, runs: c.runs },
     );
@@ -126,7 +131,7 @@ export function runCases(cases, { suite, argv = process.argv.slice(2), gateNote,
     });
   }
 
-  if (teardown) teardown();
+  if (teardown) await teardown();
 
   // 부하는 모든 케이스가 끝난 뒤에 확정한다 (실행 구간 전체의 평균).
   const load = sampleLoad();

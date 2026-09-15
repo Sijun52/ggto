@@ -1,0 +1,4 @@
+# 2023년 코드가 rustc 1.98 의 deny-by-default 린트에 걸린다 (스파이크 2절 시도 4).
+# 환경변수 RUSTFLAGS 에 의존하지 않는다 — 다른 PC 에서 잊는다.
+[build]
+rustflags = ["-A", "dangerous_implicit_autorefs"]

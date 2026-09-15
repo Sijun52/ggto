@@ -1,0 +1,5 @@
+# 재현성용 고정 (P4.md 1절). bincode 대책이 **아니다** — 의존성 해석은 툴체인이 아니라
+# 오늘의 crates.io 인덱스 + 요구 문자열의 함수다 (스파이크 2.1). 그건 Cargo.lock 이 고친다.
+[toolchain]
+channel = "1.98.1"
+targets = ["x86_64-pc-windows-gnu"]

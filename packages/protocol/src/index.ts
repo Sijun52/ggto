@@ -288,3 +288,129 @@ export interface TrainerPoolResponse {
   categories: Category[];
   nodes: number;
 }
+
+// --- P4 솔버 (P4.md 3.1 · 5.4 · 7) ------------------------------------------
+//
+// 와이어 타입만 둔다. `@ggto/protocol` 은 런타임 의존성이 0 이므로 `@ggto/solver` 의
+// 도메인 타입을 import 하지 않는다 — 대신 서버 라우트가 컴파일 타임에 둘의 호환을 본다.
+
+export type SizingPresetName = 'simple' | 'standard' | 'river-heavy';
+
+export interface StreetSizingDto {
+  bet: string;
+  raise: string;
+}
+
+export interface SizingsDto {
+  flop: StreetSizingDto;
+  turn: StreetSizingDto;
+  river: StreetSizingDto;
+}
+
+/**
+ * 솔브의 레이크. 프리플랍 차트의 `RakeDto` 와 **다르다**: 포스트플랍 솔버는
+ * `noFlopNoDrop` 을 모른다 (플랍이 이미 깔린 상태에서 시작한다).
+ */
+export type SolveRakeDto = { mode: 'none' } | { mode: 'pot'; pct: number; capBb: number };
+
+export interface SolveRequestDto {
+  oop: string;
+  ip: string;
+  /** "Ks7h2h" 3..5장 붙여쓰기 */
+  board: string;
+  potBb: number;
+  stackBb: number;
+  sizings: SizingPresetName | SizingsDto;
+  rake?: SolveRakeDto;
+  targetExploitabilityPct?: number;
+  maxIterations?: number;
+  compressed?: boolean;
+  /** 없으면 estimate 만 하고 큐에 넣지 않는다 (P4.md 5.2 사전 확인) */
+  confirm?: boolean;
+}
+
+export type SolveJobStatus =
+  | 'estimated'
+  | 'queued'
+  | 'estimating'
+  | 'running'
+  | 'saving'
+  | 'done'
+  | 'failed'
+  | 'cancelled';
+
+export interface SolvePostResponse {
+  jobId: string | null;
+  hash: string;
+  cached: boolean;
+  status: SolveJobStatus;
+  estMemoryBytes: number;
+  estSeconds: number;
+  /** 사용자가 보낸 원본 슈트 (정규 보드가 아니다) */
+  board: string;
+}
+
+/** 169 격자용 집계 (P2.md 3.5 규칙, 도달 가중) */
+export interface SolveAggregateDto {
+  strategy: number[][];
+  ev: number[][];
+  reach: number[][];
+}
+
+/** base64 는 전부 **f32 little-endian** 이다 (D7 — f16 금지) */
+export interface SolveNodeResponse {
+  street: 'flop' | 'turn' | 'river';
+  line: string;
+  board: string;
+  player: 'oop' | 'ip';
+  potChips: number;
+  stacksChips: [number, number];
+  actions: string[];
+  /** base64 f32[actions][1326] */
+  strategy: string;
+  /** base64 f32[actions][1326], bb, stack_delta_from_node */
+  ev: string;
+  reach: [string, string];
+  equity: [string, string];
+  /** [oop, ip] 레인지 가중 평균 EV (bb). 합 = `potChips / 100` (P4.md 3.5) */
+  evAvgBb: [number, number];
+  aggregate: SolveAggregateDto;
+  evBasis: 'stack_delta_from_node';
+}
+
+export interface SolveRunoutCardDto {
+  card: string;
+  evOop: number;
+  evIp: number;
+  equityOop: number;
+  strategyRoot: number[];
+}
+
+export interface SolveRunoutsResponse {
+  line: string;
+  board: string;
+  cards: SolveRunoutCardDto[];
+}
+
+export interface SolveListItemDto {
+  hash: string;
+  boardCanonical: string;
+  street: 'flop' | 'turn' | 'river';
+  potBb: number;
+  stackBb: number;
+  sizings: string;
+  compressed: boolean;
+  exploitability: number;
+  iterations: number;
+  bytes: number;
+  solver: string;
+  createdAt: number;
+  lastUsedAt: number;
+  elapsedMs: number;
+}
+
+export interface SolveListResponse {
+  solves: SolveListItemDto[];
+  totalBytes: number;
+  capBytes: number;
+}
