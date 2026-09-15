@@ -9,6 +9,7 @@
 import { existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { isCurrentConfigJson } from './hash.js';
 import type { Street } from './types.js';
 
 export const CACHE_SCHEMA_VERSION = 1;
@@ -106,6 +107,8 @@ export interface RepairReport {
   partsRemoved: string[];
   orphanBinsRemoved: string[];
   orphanRowsRemoved: string[];
+  /** 옛 정규 JSON(`v:1`, 솔버 id 없음) 으로 만든 행 — 해시 규칙이 바뀌어 다시 찾을 수 없다 */
+  staleRowsRemoved: string[];
 }
 
 export interface EvictReport {
@@ -292,7 +295,12 @@ export class SolveCache {
 
   /** 기동 정리. 결과를 돌려주고 호출자가 로그로 남긴다 (P4.md 4.2). */
   repair(): RepairReport {
-    const report: RepairReport = { partsRemoved: [], orphanBinsRemoved: [], orphanRowsRemoved: [] };
+    const report: RepairReport = {
+      partsRemoved: [],
+      orphanBinsRemoved: [],
+      orphanRowsRemoved: [],
+      staleRowsRemoved: [],
+    };
     const files = readdirSync(this.dir);
     const rows = new Map(this.list().map((r) => [r.hash, r]));
 
@@ -310,10 +318,18 @@ export class SolveCache {
         }
       }
     }
-    for (const [hash] of rows) {
+    for (const [hash, row] of rows) {
       if (!existsSync(this.binPath(hash))) {
         this.#db.prepare('DELETE FROM solve WHERE hash = ?').run(hash);
         report.orphanRowsRemoved.push(hash);
+        continue;
+      }
+      // 해시 입력에 솔버 id 가 들어가기 전(`v:1`)에 만든 행은 **다시 조회될 수 없다**:
+      // 같은 요청이 이제 다른 해시를 낸다. 남겨 두면 20GB 상한만 먹는다 (P4 R1 MINOR 7).
+      // 지워도 잃는 것은 개발용 캐시뿐이다 — 사용자 데이터가 아니다 (D16 의 구분).
+      if (!isCurrentConfigJson(row.configJson)) {
+        this.remove(hash);
+        report.staleRowsRemoved.push(hash);
       }
     }
     return report;

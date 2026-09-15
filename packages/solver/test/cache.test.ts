@@ -30,11 +30,18 @@ afterEach(() => {
   for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
 });
 
-function put(cache: SolveCache, hash: string, bytes: number, exploitability = 0.5): SolveRow {
+function put(
+  cache: SolveCache,
+  hash: string,
+  bytes: number,
+  exploitability = 0.5,
+  // 정규 JSON 버전. 기본은 지금 버전 — `v:1` 행은 `repair()` 가 버린다 (P4 R1 MINOR 7).
+  configJson = `{"v":2,"h":"${hash}"}`,
+): SolveRow {
   writeFileSync(cache.partPath(hash), Buffer.alloc(bytes, 1));
   return cache.commit({
     hash,
-    configJson: `{"v":1,"h":"${hash}"}`,
+    configJson,
     boardCanonical: '2h7hKs',
     street: 'flop',
     potChips: 2000,
@@ -187,16 +194,33 @@ describe('P4 4.2 repair()', () => {
     expect(r.partsRemoved).toEqual([`${'d'.repeat(64)}.bin.part`]);
     expect(r.orphanBinsRemoved).toEqual([`${orphanBin}.bin`]);
     expect(r.orphanRowsRemoved).toEqual([orphanRow]);
+    expect(r.staleRowsRemoved).toEqual([]);
     expect(c.get(good)).not.toBeNull();
     expect(existsSync(c.binPath(good))).toBe(true);
     expect(c.list().length).toBe(1);
   });
 
+  it('P5 12 repair() 는 옛 정규 JSON(v:1) 행과 그 .bin 을 버린다 (R1 MINOR 7)', () => {
+    const c = open();
+    const stale = 'a'.repeat(64);
+    const fresh = 'b'.repeat(64);
+    put(c, stale, 100, 0.5, `{"v":1,"h":"${stale}"}`);
+    put(c, fresh, 100);
+
+    const r = c.repair();
+    expect(r.staleRowsRemoved).toEqual([stale]);
+    // 행만 지우면 `.bin` 이 고아로 남아 20GB 를 먹는다 — 파일도 같이 사라져야 한다.
+    expect(existsSync(c.binPath(stale))).toBe(false);
+    expect(c.get(stale)).toBeNull();
+    expect(c.get(fresh)).not.toBeNull();
+  });
+
   it('P4 4.2 깨끗한 캐시에서는 아무것도 치우지 않는다 (멱등)', () => {
     const c = open();
     put(c, 'a'.repeat(64), 100);
-    expect(c.repair()).toEqual({ partsRemoved: [], orphanBinsRemoved: [], orphanRowsRemoved: [] });
-    expect(c.repair()).toEqual({ partsRemoved: [], orphanBinsRemoved: [], orphanRowsRemoved: [] });
+    const clean = { partsRemoved: [], orphanBinsRemoved: [], orphanRowsRemoved: [], staleRowsRemoved: [] };
+    expect(c.repair()).toEqual(clean);
+    expect(c.repair()).toEqual(clean);
   });
 });
 
@@ -228,11 +252,11 @@ describe('P4 4.1 config_json', () => {
       stackBb: 80,
       sizings: 'simple',
     });
-    const hash = configHash(cfg);
+    const hash = configHash(cfg, 'fake');
     writeFileSync(c.partPath(hash), Buffer.alloc(16, 1));
     c.commit({
       hash,
-      configJson: canonicalConfigJson(cfg),
+      configJson: canonicalConfigJson(cfg, 'fake'),
       boardCanonical: '2h7hKs',
       street: 'flop',
       potChips: cfg.potChips,
@@ -258,7 +282,9 @@ describe('P4 4.1 config_json', () => {
     // 1326 f32 = 5304 바이트 = 10608 hex 문자.
     expect(parsed.oop.length).toBe(1326 * 8);
     expect(parsed.ip.length).toBe(1326 * 8);
-    expect(parsed.v).toBe(1);
+    expect(parsed.v).toBe(2);
+    // 해시 입력에 솔버 id 가 들어간다 (P4 R1 MINOR 7) — 엔진이 바뀌면 키가 갈라진다.
+    expect((parsed as unknown as { solver: string }).solver).toBe('fake');
     expect(parsed.pot).toBe(2000);
     expect(parsed.sizings.flop.bet).toBe('33%,75%');
     // 행만으로 해시를 다시 만들 수 있다 = 게임이 완전히 기술돼 있다.

@@ -93,6 +93,8 @@ export class SolveConfigError extends Error {
 /** 데몬·큐·캐시 공용 에러 코드 (P4.md 5.3 표 아래) */
 export type SolverErrorCode =
   | 'BadRequest'
+  /** 라인이 chance 노드다 — `runouts` 를 부르라는 뜻 (P5.md 1.6). 프론트가 종류를 추측하지 않는다 (D27) */
+  | 'ChanceNode'
   | 'NoSuchLine'
   | 'NotChanceNode'
   | 'NotLoaded'
@@ -167,6 +169,12 @@ export interface CanonicalNode {
    * 1326 배열만으로는 이 항등식을 검증할 수 없어서 (상대의 EV 가 없다) 스칼라로 같이 보낸다.
    */
   evAvgBb: [number, number];
+  /**
+   * 도달 질량이 0 이면 `false` 이고 `evAvgBb` 는 `[0, 0]` 이다 (P4 R1 MINOR 11).
+   * 0/0 = NaN 이 JSON 에서 null 로 나가 화면이 NaN 을 그리던 것의 수정 — 값이 **없다**는
+   * 사실을 숫자가 아니라 이 플래그가 말한다.
+   */
+  reachable: boolean;
   evBasis: 'stack_delta_from_node';
 }
 

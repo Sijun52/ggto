@@ -67,7 +67,7 @@ afterAll(async () => {
 
 async function solve(req: SolveRequest): Promise<{ hash: string; bytes: number; exploitability: number }> {
   const cfg = buildConfig(req);
-  const hash = configHash(cfg);
+  const hash = configHash(cfg, solver.id);
   const cached = cache.lookup(hash, cfg.targetExploitabilityPct);
   if (cached.hit && cached.row !== null) {
     return { hash, bytes: cached.row.bytes, exploitability: cached.row.exploitability };
@@ -84,7 +84,7 @@ async function solve(req: SolveRequest): Promise<{ hash: string; bytes: number; 
       cache.commit({
         hash,
         // P4.md 4.1 정규 JSON (R1 MAJOR 5) — 서버 라우트와 같은 값을 쓴다.
-        configJson: canonicalConfigJson(cfg),
+        configJson: canonicalConfigJson(cfg, solver.id),
         boardCanonical: formatCards(cfg.board),
         street: cfg.board.length === 3 ? 'flop' : cfg.board.length === 4 ? 'turn' : 'river',
         potChips: cfg.potChips,
@@ -121,8 +121,8 @@ describe.skipIf(!ENABLED)('P4 8.3 통합 — 실제 데몬', () => {
 
     // 슈트만 바꾼 표기: 같은 해시여야 한다 (D5). 레인지는 슈트 대칭이다.
     const variant = buildConfig({ ...SPOT, board: 'Kd7s2sQc' });
-    expect(configHash(variant)).toBe(first.hash);
-    expect(cache.lookup(configHash(variant), 0.5).hit).toBe(true);
+    expect(configHash(variant, solver.id)).toBe(first.hash);
+    expect(cache.lookup(configHash(variant, solver.id), 0.5).hit).toBe(true);
   });
 
   it('P4 8.3 두 플레이어 루트 EV 합 = 팟 (±0.01bb) 이고 전략 행 합 = 1', async () => {
@@ -260,7 +260,7 @@ describe.skipIf(!ENABLED)('P4 8.3 통합 — 실제 데몬', () => {
     };
     const cfg = buildConfig(spot);
     const estimate = await queue.estimateOnly(cfg);
-    const hash = configHash(cfg);
+    const hash = configHash(cfg, solver.id);
 
     let peakRss = 0;
     const poll = setInterval(() => {
@@ -320,7 +320,7 @@ describe.skipIf(!ENABLED)('P4 8.3 통합 — 실제 데몬', () => {
       maxIterations: 100_000,
     };
     const cfg = buildConfig(heavy);
-    const hash = configHash(cfg);
+    const hash = configHash(cfg, solver.id);
     const estimate = await queue.estimateOnly(cfg);
     const handle = queue.submit({ hash, cfg, estimate, outPath: cache.partPath(hash), onSaved: () => undefined });
     // 첫 진행률을 본 뒤 취소한다.
@@ -425,7 +425,7 @@ describe.skipIf(!ENABLED)('P4 8.3 재솔브 후 낡은 결과를 주지 않는�
 
   it('P4 8.3 REPLACE 뒤 node 전략이 바뀐다 (데몬이 파일 변경을 본다)', async () => {
     const cfg = buildConfig(ROUGH);
-    const hash = configHash(cfg);
+    const hash = configHash(cfg, solver.id);
     const rough = await solve(ROUGH);
     expect(rough.hash).toBe(hash);
 
@@ -457,7 +457,7 @@ describe.skipIf(!ENABLED)('P4 8.3 재솔브 후 낡은 결과를 주지 않는�
 
   it('P4 8.3 삭제 후 재솔브해도 새 결과를 준다', async () => {
     const cfg = buildConfig(FINE);
-    const hash = configHash(cfg);
+    const hash = configHash(cfg, solver.id);
     await solve(FINE);
     const h1 = await solver.openWith(hash, cache.binPath(hash), cfg.chipsPerBb);
     const before = await h1.node('');
@@ -495,7 +495,7 @@ describe.skipIf(!ENABLED)('P4 8.3 역순열 방향 (R1 MAJOR 6)', () => {
     const B: SolveRequest = { ...SPOT, board: 'Kd7s2sQh' };
     const cfgA = buildConfig(A);
     const cfgB = buildConfig(B);
-    expect(configHash(cfgA)).toBe(configHash(cfgB));
+    expect(configHash(cfgA, solver.id)).toBe(configHash(cfgB, solver.id));
     expect([...cfgA.perm]).not.toEqual([...cfgB.perm]);
 
     const { hash } = await solve(A);
@@ -557,7 +557,7 @@ describe.skipIf(!ENABLED)('P4 3.4 compressed 경로 (R1 UNCERTAIN 1)', () => {
     const cfgPlain = buildConfig(plain);
     const cfgPacked = buildConfig(packed);
     // 압축은 **다른 결과**다 — 해시가 갈라져야 한다 (P4.md 3.4).
-    expect(configHash(cfgPacked)).not.toBe(configHash(cfgPlain));
+    expect(configHash(cfgPacked, solver.id)).not.toBe(configHash(cfgPlain, solver.id));
 
     const estimate = await queue.estimateOnly(cfgPacked);
     expect(estimate.memoryBytesCompressed).toBeLessThan(estimate.memoryBytes);

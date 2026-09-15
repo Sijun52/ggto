@@ -4,14 +4,7 @@
  */
 
 import { cardRank, cardSuit, parseCards, RANKS, SUITS } from '@ggto/core';
-
-/** 슈트 기호와 색. 클럽/스페이드는 밝은 회색, 하트/다이아는 붉은 계열 (표준 4색이 아니다). */
-const SUIT_GLYPH: Record<string, { glyph: string; className: string }> = {
-  c: { glyph: '♣', className: 'text-[#34d399]' },
-  d: { glyph: '♦', className: 'text-[#38bdf8]' },
-  h: { glyph: '♥', className: 'text-[#f87171]' },
-  s: { glyph: '♠', className: 'text-[#f1f5f9]' },
-};
+import { SUIT_STYLE } from '../lib/palette';
 
 export function HeroCards(props: { combo: string }): React.JSX.Element {
   const cards = parseCards(props.combo);
@@ -20,7 +13,7 @@ export function HeroCards(props: { combo: string }): React.JSX.Element {
       {cards.map((card, i) => {
         const rank = RANKS[cardRank(card)] as string;
         const suit = SUITS[cardSuit(card)] as string;
-        const style = SUIT_GLYPH[suit] ?? { glyph: suit, className: 'text-[#f1f5f9]' };
+        const style = SUIT_STYLE[suit] ?? { glyph: suit, className: 'text-[#f1f5f9]' };
         return (
           <span
             key={`${String(i)}-${rank}${suit}`}

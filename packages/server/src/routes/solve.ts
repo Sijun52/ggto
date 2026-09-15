@@ -63,7 +63,10 @@ function toHttp(e: unknown): never {
     const status =
       e.code === 'TooLarge'
         ? 413
-        : e.code === 'NoSuchLine' || e.code === 'NotChanceNode' || e.code === 'BadRequest'
+        : e.code === 'NoSuchLine' ||
+            e.code === 'ChanceNode' ||
+            e.code === 'NotChanceNode' ||
+            e.code === 'BadRequest'
           ? 400
           : e.code === 'NotLoaded' || e.code === 'NoSolve'
             ? 404
@@ -107,6 +110,23 @@ function listItem(row: {
   };
 }
 
+/** 다섯 파라미터 밖의 **설정** 파라미터. 이것만 와도 "쿼리 없음" 이 아니다 (R2 MINOR 3). */
+const EXTRA_CONFIG_PARAMS = ['sizings', 'compressed', 'rakePct', 'rakeCapBb'] as const;
+
+/**
+ * `compressed` 쿼리. `1`·`true` 가 참, `0`·`false`·없음이 거짓, 그 밖은 **400** 이다.
+ *
+ * R2 MINOR 2: 전에는 문자 `1` 만 참이라 `compressed=true` 가 조용히 거짓으로 읽혔고,
+ * 압축 솔브를 표기 모드로 열면 해시가 갈라져 `HashMismatch` 가 났다. 조용한 오독을
+ * 없애려면 "모르는 값" 을 통과시키지 않아야 한다.
+ */
+function compressedParam(url: string): boolean {
+  const raw = queryParam(url, 'compressed');
+  if (raw === null || raw === '0' || raw === 'false') return false;
+  if (raw === '1' || raw === 'true') return true;
+  throw badRequest(`compressed must be 1/true/0/false, got ${JSON.stringify(raw)}`);
+}
+
 /**
  * `hash` 로 저장된 결과를 열어 노드를 읽을 때 쓸 **슈트 순열**을 구한다.
  *
@@ -121,13 +141,26 @@ function listItem(row: {
  * 쿼리가 **아예 없으면** 순열 없이 정규 보드 공간 그대로 답한다 (응답의 `perm` 이
  * 항등 `[0,1,2,3]` 으로 그 사실을 알린다). 정규 보드도 유효한 표기다 — 거짓말이 아니다.
  */
-function permFor(url: string, hash: string): { perm: [number, number, number, number] | null; cfg: CanonicalConfig | null } {
+function permFor(
+  url: string,
+  hash: string,
+  solverId: string,
+): { perm: [number, number, number, number] | null; cfg: CanonicalConfig | null } {
   const board = queryParam(url, 'board');
   const oop = queryParam(url, 'oop');
   const ip = queryParam(url, 'ip');
   const potBb = queryParam(url, 'potBb');
   const stackBb = queryParam(url, 'stackBb');
+  const extras = EXTRA_CONFIG_PARAMS.filter((k) => queryParam(url, k) !== null);
   if (board === null && oop === null && ip === null && potBb === null && stackBb === null) {
+    if (extras.length > 0) {
+      // `sizings=standard` 만 온 요청을 "쿼리 없음" 으로 보면 정규 보드로 200 을 주면서
+      // 사용자가 보낸 설정은 **무시**한 것이 된다 (R2 MINOR 3). 다섯 파라미터 규칙과
+      // 같은 이유로 거절한다.
+      throw badRequest(
+        `${extras.join(', ')} needs board, oop, ip, potBb, stackBb too (or send no config at all)`,
+      );
+    }
     return { perm: null, cfg: null };
   }
   if (board === null || oop === null || ip === null || potBb === null || stackBb === null) {
@@ -137,6 +170,7 @@ function permFor(url: string, hash: string): { perm: [number, number, number, nu
   }
   const sizings = queryParam(url, 'sizings') ?? 'simple';
   if (!isSizingPreset(sizings)) throw badRequest(`unknown sizings preset: ${sizings}`);
+  const compressed = compressedParam(url);
   const rakePct = queryParam(url, 'rakePct');
   const rakeCapBb = queryParam(url, 'rakeCapBb');
   let cfg: CanonicalConfig;
@@ -148,7 +182,7 @@ function permFor(url: string, hash: string): { perm: [number, number, number, nu
       potBb: Number(potBb),
       stackBb: Number(stackBb),
       sizings: sizings as SizingPresetName,
-      compressed: queryParam(url, 'compressed') === '1',
+      compressed,
       ...(rakePct === null
         ? {}
         : { rake: { mode: 'pot' as const, pct: Number(rakePct), capBb: Number(rakeCapBb ?? '0') } }),
@@ -156,7 +190,7 @@ function permFor(url: string, hash: string): { perm: [number, number, number, nu
   } catch (e) {
     return toHttp(e);
   }
-  if (configHash(cfg) !== hash) {
+  if (configHash(cfg, solverId) !== hash) {
     throw new HttpError(
       400,
       'HashMismatch',
@@ -205,13 +239,24 @@ export function solveRoutes(deps: SolveDeps | null): Hono {
       throw badRequest('body must be JSON');
     })) as SolveRequestDto;
 
+    // **API 는 프리셋 이름만 받는다** (P4.md 3.2, R2 MINOR 1). 커스텀 사이징으로 만든
+    // 솔브는 쿼리로 사이징을 표현할 수 없어 표기 모드로 영영 열리지 않는다 (`permFor` 가
+    // 프리셋만 받는다) — 만들 수 있게 두면 UI 가 열지 못하는 결과만 쌓인다. CLI 는 그대로다.
+    if (body.sizings !== undefined && !isSizingPreset(body.sizings)) {
+      throw new HttpError(
+        400,
+        'OutOfRange',
+        `sizings must be one of simple, standard, river-heavy (custom sizings are CLI-only)`,
+      );
+    }
+
     let cfg: CanonicalConfig;
     try {
       cfg = buildConfig(body);
     } catch (e) {
       return toHttp(e);
     }
-    const hash = configHash(cfg);
+    const hash = configHash(cfg, solver.id);
     const board = formatCards(cfg.boardOriginal);
 
     // 이미 충분히 정확한 결과가 있으면 연산 없이 끝난다 (P4.md 4.3).
@@ -225,6 +270,24 @@ export function solveRoutes(deps: SolveDeps | null): Hono {
         status: 'done',
         estMemoryBytes: 0,
         estSeconds: 0,
+        board,
+      };
+      return c.json(res);
+    }
+
+    // 같은 게임이 이미 큐/실행 중이면 **그 잡을 돌려준다** (P4 R1 MINOR 4). 폼 더블탭이
+    // 정확히 이 경로다: 다시 추정하면 트리를 빌드하는 프로세스가 하나 더 뜨고 (GB 단위),
+    // 사용자는 같은 솔브의 잡 두 개를 보게 된다.
+    const running = queue.byHash(hash);
+    if (running !== null) {
+      const est = running.estimate;
+      const res: SolvePostResponse = {
+        jobId: running.id,
+        hash,
+        cached: false,
+        status: running.status,
+        estMemoryBytes: running.memoryBytes,
+        estSeconds: est === null ? 0 : est.estSeconds,
         board,
       };
       return c.json(res);
@@ -264,7 +327,7 @@ export function solveRoutes(deps: SolveDeps | null): Hono {
             hash,
             // 정규 JSON 전체다 (P4.md 4.1 "재현·목록용"). 레인지가 없으면 행만으로
             // 게임을 재현할 수 없다 — 해시의 입력이 곧 게임의 정의다.
-            configJson: canonicalConfigJson(cfg),
+            configJson: canonicalConfigJson(cfg, solver.id),
             boardCanonical: formatCards(cfg.board),
             street: cfg.board.length === 3 ? 'flop' : cfg.board.length === 4 ? 'turn' : 'river',
             potChips: cfg.potChips,
@@ -352,7 +415,7 @@ export function solveRoutes(deps: SolveDeps | null): Hono {
     const hash = c.req.param('hash');
     const row = cache.get(hash);
     if (row === null) throw new HttpError(404, 'NoSolve', `no solve result for ${hash}`);
-    const { perm, cfg } = permFor(c.req.url, hash);
+    const { perm, cfg } = permFor(c.req.url, hash, solver.id);
     const requested = queryParam(c.req.url, 'line') ?? '';
     try {
       assertCanonicalLine(requested);
@@ -380,7 +443,7 @@ export function solveRoutes(deps: SolveDeps | null): Hono {
     const hash = c.req.param('hash');
     const row = cache.get(hash);
     if (row === null) throw new HttpError(404, 'NoSolve', `no solve result for ${hash}`);
-    const { perm, cfg } = permFor(c.req.url, hash);
+    const { perm, cfg } = permFor(c.req.url, hash, solver.id);
     const requested = queryParam(c.req.url, 'line') ?? '';
     try {
       assertCanonicalLine(requested);

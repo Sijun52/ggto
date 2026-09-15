@@ -9,7 +9,17 @@ import type {
   TrainerSessionResponse,
   TrainerSessionStatusResponse,
 } from '@ggto/protocol';
+import type { SolveListResponse, SolvePostResponse, SolveRequestDto } from '@ggto/protocol';
 import { parseRangeApi, type ApiError, type ParsedRange } from './client';
+import {
+  fetchSolveNode,
+  fetchSolveRunouts,
+  fetchSolves,
+  postSolve,
+  type SolveNodeResult,
+  type SolveRunoutsView,
+} from './solve';
+import { notationKey, type SolveNotation } from '../lib/solveNotation';
 import {
   fetchChart,
   fetchChartNode,
@@ -139,4 +149,61 @@ export function useTrainerReport(days: number, enabled: boolean): UseQueryResult
 
 export function useAnswerSpot(): UseMutationResult<AnsweredNode, ApiError, TrainerAnswerRequest> {
   return useMutation<AnsweredNode, ApiError, TrainerAnswerRequest>({ mutationFn: answerTrainer });
+}
+
+
+// --- P5 솔브 탐색기 (P5.md 4절) ---------------------------------------------
+//
+// 솔브 결과는 **불변**이라 `staleTime` 이 길다. 같은 세션에서 재솔브(REPLACE)하면
+// `done` 에서 `queryClient.invalidateQueries(['solve-node', hash])` 를 부른다 (SolvePage).
+
+const SOLVE_STALE_MS = 5 * 60_000;
+
+export function useSolves(enabled = true): UseQueryResult<SolveListResponse, ApiError> {
+  return useQuery<SolveListResponse, ApiError>({
+    queryKey: ['solves'],
+    queryFn: fetchSolves,
+    enabled,
+    staleTime: 10_000,
+    // 솔버가 없는 PC 는 503 이다. 재시도는 배너를 늦출 뿐이다 (D24).
+    retry: false,
+  });
+}
+
+/**
+ * 노드 하나. `ChanceNode`·`NoSuchLine` 은 **데이터**로 돌아온다 (`kind`) — 오류로 두면
+ * `retry` 가 돌고 `useSolveRunouts` 로 이어지는 분기를 쓸 수 없다 (P5.md 4절).
+ */
+export function useSolveNode(
+  hash: string | null,
+  line: string,
+  notation: SolveNotation | null,
+): UseQueryResult<SolveNodeResult, ApiError> {
+  return useQuery<SolveNodeResult, ApiError>({
+    queryKey: ['solve-node', hash, line, notationKey(notation)],
+    queryFn: async () => await fetchSolveNode(hash as string, line, notation),
+    enabled: hash !== null,
+    staleTime: SOLVE_STALE_MS,
+    retry: false,
+  });
+}
+
+export function useSolveRunouts(
+  hash: string | null,
+  line: string,
+  notation: SolveNotation | null,
+  enabled: boolean,
+): UseQueryResult<SolveRunoutsView, ApiError> {
+  return useQuery<SolveRunoutsView, ApiError>({
+    queryKey: ['solve-runouts', hash, line, notationKey(notation)],
+    queryFn: async () => await fetchSolveRunouts(hash as string, line, notation),
+    enabled: enabled && hash !== null,
+    staleTime: SOLVE_STALE_MS,
+    retry: false,
+  });
+}
+
+/** `confirm` 없으면 추정만, 있으면 큐에 넣는다 (P4.md 5.2). 같은 훅이 둘 다 한다. */
+export function useSolveMutation(): UseMutationResult<SolvePostResponse, ApiError, SolveRequestDto> {
+  return useMutation<SolvePostResponse, ApiError, SolveRequestDto>({ mutationFn: postSolve });
 }

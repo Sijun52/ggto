@@ -80,6 +80,7 @@ async function main() {
     JobQueue,
     PostflopSolverCli,
     SIZING_PRESETS,
+    SOLVER_ID,
     SolveCache,
     SolveConfigError,
     SolverError,
@@ -146,7 +147,7 @@ async function main() {
     return 2;
   }
 
-  const hash = configHash(cfg);
+  const hash = configHash(cfg, SOLVER_ID);
   const dataDir = process.env.GGTO_DATA_DIR ?? join(REPO_ROOT, 'data');
   const solver = new PostflopSolverCli({ bin, onLog: () => undefined });
   // 서버와 같은 훅 (P4 R1 MAJOR 3): 재솔브·삭제 전에 조회 데몬이 낡은 결과를 버린다.
@@ -199,7 +200,7 @@ async function main() {
           cache.commit({
             hash,
             // 정규 JSON 전체 (P4.md 4.1). 서버와 같은 행을 쓴다.
-            configJson: canonicalConfigJson(cfg),
+            configJson: canonicalConfigJson(cfg, SOLVER_ID),
             boardCanonical: canonicalBoard,
             street: cfg.board.length === 3 ? 'flop' : cfg.board.length === 4 ? 'turn' : 'river',
             potChips: cfg.potChips,

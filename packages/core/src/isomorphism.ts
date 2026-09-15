@@ -11,7 +11,7 @@
  */
 
 import { CardSyntaxError, type Card } from './card.js';
-import { COMBO_COUNT, comboHi, comboIndex, comboLo } from './combo.js';
+import { COMBO_COUNT, comboHi, comboLo } from './combo.js';
 import { permuteRangeSuits, type Range } from './range/range.js';
 import { ALL_SUIT_PERMS, IDENTITY_PERM, applyPermToCard, type SuitPerm } from './suitPerm.js';
 

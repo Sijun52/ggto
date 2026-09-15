@@ -16,8 +16,12 @@ import { describe, expect, it } from 'vitest';
 const FIXTURE_DIR = resolve(import.meta.dirname, 'fixtures');
 const REPO_CHARTS = resolve(import.meta.dirname, '../../data/charts');
 
+/**
+ * **차트** 픽스처만. `solve-*.json` 은 P5 솔브 응답 픽스처이고 생성기·대조 테스트가 따로
+ * 있다 (`packages/solver/scripts/make-web-fixture.mjs`, `packages/solver/test/webFixture.test.ts`).
+ */
 function fixtureFiles(): string[] {
-  return readdirSync(FIXTURE_DIR).filter((f) => f.endsWith('.json'));
+  return readdirSync(FIXTURE_DIR).filter((f) => f.endsWith('.json') && !f.startsWith('solve-'));
 }
 
 describe('P3M 8.1 web 픽스처 = 시드 산출물', () => {

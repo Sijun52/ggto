@@ -10,6 +10,7 @@ import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { Cdp, emulate, evaluate, goto, launchChrome, screenshot, waitFor } from './lib/cdp.mjs';
 import { ensureServer, firstChartSetId } from './lib/server.mjs';
+import { ensureSolve } from './lib/solve-seed.mjs';
 import { outDir } from './lib/out.mjs';
 import * as P from './lib/probes.mjs';
 
@@ -42,6 +43,8 @@ async function main() {
   mkdirSync(OUT_DIR, { recursive: true });
   const server = await ensureServer();
   const setId = await firstChartSetId(server.baseUrl);
+  const solve = await ensureSolve(server.baseUrl);
+  if (solve === null) console.log('SKIP solve pages (no solver binary)');
   const chrome = await launchChrome();
   const cdp = await Cdp.connect(chrome.wsUrl);
   try {
@@ -136,6 +139,59 @@ async function main() {
       );
       check(reachCanvas !== null && reachCanvas.cssWidth === 520, `${tag} reach 모드 캔버스도 520px`, reachCanvas);
       await screenshot(cdp, resolve(OUT_DIR, `P3M-desktop-${tag}-charts-reach.png`));
+
+      // --- 솔브 탐색기: >= 1280 은 3열 (좌 트리 · 중앙 격자 · 우 어그리게이트+액션) ---
+      if (solve !== null) {
+        await goto(cdp, `${server.baseUrl}/solve?hash=${solve.hash}`);
+        await waitFor(cdp, `document.querySelector('canvas[role="grid"]')`, { label: '탐색기 격자' });
+        await evaluate(cdp, 'window.scrollTo(0, 0)');
+        const tree = await evaluate(cdp, P.rectOf('line-tree'));
+        const grid = await evaluate(cdp, P.CANVAS);
+        const aside = await evaluate(cdp, P.rectOf('explorer-aside'));
+        const agg = await evaluate(cdp, P.rectOf('aggregate'));
+        const bar = await evaluate(cdp, P.rectOf('action-bar'));
+        check(tree !== null && grid !== null && tree.right <= grid.left, `${tag} 솔브: 트리가 격자 왼쪽`, {
+          treeRight: tree?.right,
+          gridLeft: grid?.left,
+        });
+        check(aside !== null && grid !== null && aside.left >= grid.right, `${tag} 솔브: 어그리게이트가 격자 오른쪽`, {
+          asideLeft: aside?.left,
+          gridRight: grid?.right,
+        });
+        check(
+          agg !== null && agg.top >= 0 && agg.bottom <= h,
+          `${tag} 솔브: 어그리게이트가 스크롤 0 에서 뷰포트 안`,
+          { agg, h },
+        );
+        check(
+          bar !== null && bar.top >= 0 && bar.bottom <= h,
+          `${tag} 솔브: 액션 버튼이 스크롤 0 에서 뷰포트 안 (하단 고정 바가 아니다)`,
+          { bar, h },
+        );
+        check(grid !== null && grid.cssWidth % 13 === 0, `${tag} 솔브: 격자가 13의 배수`, grid);
+        check(
+          grid !== null && grid.top >= 0 && grid.bottom <= h,
+          `${tag} 솔브: 격자가 스크롤 0 에서 통째로 보인다 (P5.md 5절 데스크톱 회귀)`,
+          { grid, h },
+        );
+        // 노드 이동 체감 (게이트 아님 — 기록): node 요청 → 격자 페인트.
+        const moveMs = await evaluate(
+          cdp,
+          `(async () => {
+            const before = document.querySelectorAll('[data-testid^="crumb-"]').length;
+            const t0 = performance.now();
+            document.querySelector('[data-testid^="solve-action-"]').click();
+            // 새 노드가 그려진 시점 = 라인 바에 칩이 하나 늘어난 프레임 (격자·바가 같은 커밋이다).
+            for (let i = 0; i < 600; i++) {
+              await new Promise((r) => requestAnimationFrame(r));
+              if (document.querySelectorAll('[data-testid^="crumb-"]').length > before) break;
+            }
+            return Math.round(performance.now() - t0);
+          })()`,
+        );
+        console.log(`NOTE  ${tag} 솔브 노드 이동 체감 ${String(moveMs)}ms (게이트 아님, P5.md 9)`);
+        await screenshot(cdp, resolve(OUT_DIR, `P5-desktop-${tag}-solve.png`));
+      }
     }
   } finally {
     cdp.close();

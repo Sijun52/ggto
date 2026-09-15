@@ -10,6 +10,7 @@ import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { Cdp, emulate, evaluate, goto, launchChrome, screenshot, waitFor } from './lib/cdp.mjs';
 import { ensureServer, firstChartSetId } from './lib/server.mjs';
+import { ensureSolve } from './lib/solve-seed.mjs';
 import { outDir } from './lib/out.mjs';
 import * as P from './lib/probes.mjs';
 
@@ -208,6 +209,113 @@ async function main() {
     await waitFor(cdp, `document.querySelector('[data-testid="report-panel"]')`, { label: '30d 리포트' });
     await commonChecks(cdp, 'report-30d');
     await screenshot(cdp, resolve(OUT_DIR, 'P3M-mobile-report-30d.png'));
+
+    // --- 7b. 솔브 (P5.md 8.3) --------------------------------------------
+    // 실제 바이너리로 만든 결과만 검사한다 — 솔버가 없으면 건너뛴다 (D24).
+    await emulate(cdp, { width: W, height: H, dpr: 2, mobile: true });
+    const solve = await ensureSolve(server.baseUrl);
+    if (solve === null) {
+      console.log('SKIP solve pages (no solver binary)');
+    } else {
+      // 7b-1. 목록
+      await goto(cdp, `${server.baseUrl}/solve`);
+      await waitFor(cdp, `document.querySelector('[data-testid="solve-list"]')`, { label: '솔브 목록' });
+      const rows = await evaluate(cdp, `document.querySelectorAll('[data-testid^="solve-row-"]').length`);
+      check(rows >= 1, 'solve-list: 행이 하나 이상', { rows });
+      await commonChecks(cdp, 'solve-list');
+      await screenshot(cdp, resolve(OUT_DIR, 'P5-mobile-solve-list.png'));
+
+      // 7b-2. 새 솔브 폼
+      await evaluate(cdp, P.click('new-solve'));
+      await waitFor(cdp, `document.querySelector('[data-testid="solve-form"]')`, { label: '솔브 폼' });
+      await commonChecks(cdp, 'solve-form');
+      await screenshot(cdp, resolve(OUT_DIR, 'P5-mobile-solve-form.png'));
+      await evaluate(cdp, P.click('form-cancel'));
+
+      // 7b-3. 탐색기 루트 (행동 노드)
+      await waitFor(cdp, `document.querySelector('[data-testid="solve-open-${solve.hash}"]')`, { label: '목록 복귀' });
+      await evaluate(cdp, P.click(`solve-open-${solve.hash}`));
+      await waitFor(cdp, `document.querySelector('canvas[role="grid"]')`, { label: '탐색기 격자' });
+      await commonChecks(cdp, 'solve-explorer');
+      await gridChecks(cdp, 'solve-explorer');
+      const sBar = await evaluate(cdp, P.rectOf('action-bar'));
+      check(sBar !== null && sBar.bottom === H, '탐색기: 하단 바가 화면 맨 아래', { bar: sBar, H });
+      check(sBar !== null && sBar.top >= H * 0.6, '탐색기: 하단 바가 엄지 범위(하단 40%)', {
+        ...sBar,
+        threshold: H * 0.6,
+      });
+      check(sBar !== null && sBar.h >= 64, '탐색기: 하단 바 높이 >= 64', sBar);
+      const actionRects = await evaluate(
+        cdp,
+        `(() => [...document.querySelectorAll('[data-testid^="solve-action-"]')].map((b) => {
+          const r = b.getBoundingClientRect();
+          return { testid: b.getAttribute('data-testid'), w: Math.round(r.width), h: Math.round(r.height) };
+        }))()`,
+      );
+      check(actionRects.length >= 2, '탐색기: 액션 버튼이 둘 이상', actionRects);
+      check(actionRects.every((a) => a.h >= 48), '탐색기: 액션 버튼 높이 >= 48', actionRects);
+      check(
+        (await evaluate(cdp, `document.querySelector('[data-testid="node-ev"]').textContent`)).includes('= 팟'),
+        '탐색기: 노드 EV 합 = 팟 줄이 있다',
+      );
+      await screenshot(cdp, resolve(OUT_DIR, 'P5-mobile-solve-explorer.png'));
+
+      // 7b-4. chance 노드 (스트리트를 닫아 런아웃 히트맵으로)
+      await evaluate(cdp, P.click('solve-action-X'));
+      await waitFor(cdp, `document.querySelector('[data-testid="solve-action-X"]')`, { label: '두 번째 X' });
+      await evaluate(cdp, P.click('solve-action-X'));
+      await waitFor(cdp, `document.querySelector('[data-testid="runouts"]')`, { label: '런아웃 히트맵' });
+      await commonChecks(cdp, 'solve-chance');
+      const heat = await evaluate(cdp, P.RUNOUT_GRID);
+      check(heat !== null && heat.cells === 52, '히트맵: 52칸 (보드 카드는 빈 칸)', heat);
+      check(heat !== null && heat.maxRowWidth <= 343, '히트맵: 한 행의 폭 합 <= 343', heat);
+      check(
+        (await evaluate(cdp, `document.querySelector('[data-testid="action-bar-chance"]').textContent`)).includes(
+          '카드를 고르세요',
+        ),
+        'chance: 하단 바가 카드를 고르라고 말한다',
+      );
+      await screenshot(cdp, resolve(OUT_DIR, 'P5-mobile-solve-chance.png'));
+
+      // 7b-5. 2단계 탭 → 리버 행동 노드
+      const firstCard = await evaluate(
+        cdp,
+        `(() => document.querySelector('[data-testid="runouts"] [data-tap="cell"]').getAttribute('data-testid'))()`,
+      );
+      await evaluate(cdp, P.click(firstCard));
+      const readoutAfterFirstTap = await evaluate(
+        cdp,
+        `document.querySelector('[data-testid="runout-readout"]').textContent`,
+      );
+      check(readoutAfterFirstTap.startsWith('선택: '), '히트맵: 첫 탭은 상태줄만 바꾼다', {
+        readoutAfterFirstTap,
+      });
+      check(
+        (await evaluate(cdp, `document.querySelector('[data-testid="runouts"]') !== null`)) === true,
+        '히트맵: 첫 탭으로는 노드가 바뀌지 않는다',
+      );
+      await evaluate(cdp, P.click(firstCard));
+      await waitFor(cdp, `document.querySelector('canvas[role="grid"]')`, { label: '리버 노드 격자' });
+      await commonChecks(cdp, 'solve-river');
+      const boardCards = await evaluate(
+        cdp,
+        `document.querySelectorAll('[data-testid="board-cards"] > span').length`,
+      );
+      check(boardCards === 5, '리버 노드: 헤더 보드가 5장 (딜된 카드 포함)', { boardCards });
+      await screenshot(cdp, resolve(OUT_DIR, 'P5-mobile-solve-river.png'));
+
+      // 7b-6. 터미널 — 리버에서 체크-체크는 쇼다운이다 (더 이상 노드가 없다).
+      await evaluate(cdp, P.click('solve-action-X'));
+      await waitFor(cdp, `document.querySelector('[data-testid="solve-action-X"]')`, { label: '리버 두 번째 X' });
+      await evaluate(cdp, P.click('solve-action-X'));
+      await waitFor(cdp, `document.querySelector('[data-testid="action-bar-terminal"]')`, { label: '터미널 바' });
+      await commonChecks(cdp, 'solve-terminal');
+      check(
+        (await evaluate(cdp, `document.querySelector('[data-testid="line-back"]').disabled`)) === false,
+        'terminal: `←` 로 이전 노드로 돌아갈 수 있다',
+      );
+      await screenshot(cdp, resolve(OUT_DIR, 'P5-mobile-solve-terminal.png'));
+    }
 
     // --- 8. 태블릿 768x1024 (여전히 터치다) -------------------------------
     // md 브레이크포인트가 정확히 768 이라 여기서 `md:min-h-0` 이 켜진다. 손가락은

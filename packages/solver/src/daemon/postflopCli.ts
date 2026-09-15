@@ -28,6 +28,9 @@ import {
 
 export const SOLVER_ID = 'postflop-solver@9d1509fe';
 
+/** 협조적 취소를 기다리는 시간. 넘으면 프로세스를 죽인다 (P4 R1 MINOR 5). */
+export const CANCEL_KILL_MS = 500;
+
 export function defaultBinPath(repoRoot: string): string {
   const exe = process.platform === 'win32' ? 'ggto-solver-cli.exe' : 'ggto-solver-cli';
   return `${repoRoot}/solver/ggto-solver-cli/target/release/${exe}`;
@@ -76,6 +79,7 @@ interface WireNode {
   reach: [string, string];
   equity: [string, string];
   evAvgBb: [number, number];
+  reachable?: unknown;
   evBasis: 'stack_delta_from_node';
 }
 
@@ -86,6 +90,11 @@ function parseNode(raw: unknown): CanonicalNode {
   const ev = decodeRows(n.ev, rows);
   for (const a of [...strategy, ...ev]) {
     if (a.length !== COMBO_COUNT) throw new SolverError('BadRequest', 'daemon returned a non-1326 array');
+  }
+  // 옛 데몬(필드 없음)과 새 서버가 섞이면 도달 0 노드에서 NaN 이 화면까지 간다.
+  // 조용히 true 로 떨어지지 않고 여기서 터뜨린다 (P4 R1 MINOR 11).
+  if (typeof n.reachable !== 'boolean') {
+    throw new SolverError('ProtocolMismatch', 'daemon node response has no `reachable` flag — rebuild the solver');
   }
   return {
     street: n.street,
@@ -100,6 +109,7 @@ function parseNode(raw: unknown): CanonicalNode {
     reach: [decodeRows(n.reach[0], 1)[0] as Float32Array, decodeRows(n.reach[1], 1)[0] as Float32Array],
     equity: [decodeRows(n.equity[0], 1)[0] as Float32Array, decodeRows(n.equity[1], 1)[0] as Float32Array],
     evAvgBb: n.evAvgBb,
+    reachable: n.reachable,
     evBasis: n.evBasis,
   };
 }
@@ -171,9 +181,17 @@ export class PostflopSolverCli implements Solver {
     signal: AbortSignal,
   ): Promise<SolveSummary> {
     const client = this.#open('--solve');
+    let killTimer: NodeJS.Timeout | null = null;
     const onAbort = (): void => {
-      // 취소는 `cancel` 한 줄로 시작해서, 응답이 없으면 close() 의 2초 뒤 kill 이 끝낸다.
+      // 취소는 `cancel` 한 줄로 시작한다 — 데몬이 반복 경계에서 협조적으로 멈춘다.
       void client.request('cancel', {}).catch(() => undefined);
+      // **협조가 500ms 안에 오지 않으면 kill 한다** (P4 R1 MINOR 5). 큰 플랍은 CFR 반복
+      // 한 번이 초 단위라 경계까지 몇 초가 걸리고, 그동안 사용자에게는 취소가 먹지 않은
+      // 것으로 보인다. 남는 `.part` 는 큐가 지운다 (R1 MINOR 3).
+      killTimer = setTimeout(() => {
+        client.kill();
+      }, CANCEL_KILL_MS);
+      killTimer.unref();
     };
     signal.addEventListener('abort', onAbort, { once: true });
     try {
@@ -195,6 +213,7 @@ export class PostflopSolverCli implements Solver {
       return r;
     } finally {
       signal.removeEventListener('abort', onAbort);
+      if (killTimer !== null) clearTimeout(killTimer);
       await client.close();
     }
   }

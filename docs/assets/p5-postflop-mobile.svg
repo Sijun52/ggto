@@ -117,12 +117,12 @@
   <text class="xs" x="308" y="212">초록 = OOP 유리 · 빨강 = OOP 불리 · 빈 칸 = 보드 카드</text>
   <rect x="306" y="220" width="206" height="30" rx="4" fill="#eff6ff" stroke="#bfdbfe"/>
   <text class="xs mono" x="312" y="232">선택: Q♣ · OOP +0.42bb · 에퀴티 51.2%</text>
-  <text class="xs mono" x="312" y="244">루트 전략 X 61% · B6.6 30% · B15 9%</text>
+  <text class="xs mono" x="312" y="244">카드 뒤 전략 61% / 30% / 9% (이름은 그 노드에서)</text>
   <rect x="440" y="224" width="68" height="22" rx="4" fill="#0f172a"/><text class="xs" x="474" y="238" text-anchor="middle" fill="#fff">이 카드로 →</text>
   <text class="cap" x="308" y="266">1탭 = 상태줄, 2탭 또는 "이 카드로" = 이동 (25px 칸 오탭 방지)</text>
   <g class="xs">
-    <text x="306" y="290" fill="#94a3b8">어그리게이트 (chance 노드: 카드별 EV 분포)</text>
-    <text x="306" y="304" class="mono">평균 12.84 · 표준편차 0.91 · 최고 +2.14 · 최저 −1.86</text>
+    <text x="306" y="290" fill="#94a3b8">요약은 히트맵 위 한 줄이다 (아래에 상자를 더 두지 않는다)</text>
+    <text x="306" y="304" class="mono">49장 · OOP 평균 12.84bb · 최고 A♠ +2.14 · 최저 5♥ −1.86</text>
   </g>
   <!-- bottom bar B -->
   <rect x="300" y="452" width="218" height="55" fill="#ffffff" stroke="#cbd5e1"/>

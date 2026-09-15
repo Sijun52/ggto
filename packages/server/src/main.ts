@@ -113,10 +113,14 @@ function openSolver(): { solver: PostflopSolverCli; queue: JobQueue; cache: Solv
   });
   // 기동 정리는 여기서만 한다 (P4.md 7절). 데몬은 안 띄운다.
   const report = cache.repair();
-  const cleaned = report.partsRemoved.length + report.orphanBinsRemoved.length + report.orphanRowsRemoved.length;
+  const cleaned =
+    report.partsRemoved.length +
+    report.orphanBinsRemoved.length +
+    report.orphanRowsRemoved.length +
+    report.staleRowsRemoved.length;
   if (cleaned > 0) {
     console.log(
-      `[ggto] solve cache repair: .part ${String(report.partsRemoved.length)} · orphan .bin ${String(report.orphanBinsRemoved.length)} · orphan rows ${String(report.orphanRowsRemoved.length)}`,
+      `[ggto] solve cache repair: .part ${String(report.partsRemoved.length)} · orphan .bin ${String(report.orphanBinsRemoved.length)} · orphan rows ${String(report.orphanRowsRemoved.length)} · stale (v1) rows ${String(report.staleRowsRemoved.length)}`,
     );
   }
   const queue = new JobQueue({ solver, memoryBytes: envBytes('GGTO_SOLVE_MEMORY_BYTES', DEFAULT_MEMORY_BYTES) });

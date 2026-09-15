@@ -307,6 +307,28 @@ fn p4_8_2_runouts_lists_49_turn_cards_excluding_the_board() {
     assert_eq!(e.code, "NotChanceNode");
 }
 
+// --- P5.md 1.6: chance 노드의 전용 오류 코드 -------------------------------------
+
+#[test]
+fn p5_1_6_node_on_a_chance_node_is_chance_node_not_bad_request() {
+    let (mut game, _) = solved("Ks7h2h", 100);
+    // 같은 라인(`X-X`)이 `runouts` 로는 200 이다 — 위 테스트가 그것을 본다.
+    let e = nodes::node_response(&mut game, "X-X", CHIPS_PER_BB).unwrap_err();
+    assert_eq!(e.code, "ChanceNode", "front-end switches to `runouts` on this code (D27)");
+    assert!(e.message.contains("runouts"), "message must say what to call instead: {}", e.message);
+
+    // 행동 노드는 도달 가능하고 evAvgBb 가 숫자다 (필드명 단언 — P4 R1 MINOR 11).
+    let v = nodes::node_response(&mut game, "", CHIPS_PER_BB).unwrap();
+    assert_eq!(v["reachable"], serde_json::json!(true));
+    let ev = v["evAvgBb"].as_array().unwrap();
+    let sum = ev[0].as_f64().unwrap() + ev[1].as_f64().unwrap();
+    assert!(
+        (sum - POT as f64 / CHIPS_PER_BB as f64).abs() < 0.01,
+        "reachable root: Σ evAvgBb must be the pot, got {}",
+        sum
+    );
+}
+
 // --- P4.md 8.2: 단위 -----------------------------------------------------------
 
 #[test]

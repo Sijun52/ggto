@@ -100,7 +100,8 @@ describe('P4 5.4 역순열 응답', () => {
       reach: [reach, zeros()],
       equity: [zeros(), zeros()],
       evAvgBb: [12, 8],
-      evBasis: 'stack_delta_from_node',
+      reachable: true,
+    evBasis: 'stack_delta_from_node',
     };
   }
 
@@ -208,7 +209,8 @@ describe('P4 5.4 역순열 방향 (비-involution 3-cycle)', () => {
       reach: [reach, zeros()],
       equity: [equity, zeros()],
       evAvgBb: [12, 8],
-      evBasis: 'stack_delta_from_node',
+      reachable: true,
+    evBasis: 'stack_delta_from_node',
     };
   }
 

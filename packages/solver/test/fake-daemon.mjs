@@ -11,6 +11,8 @@
  *   protocol2     : hello 가 protocol 2 를 준다
  *   crash         : 첫 요청을 받으면 stderr 를 뱉고 exit 3
  *   silent        : solve 를 받으면 progress 하나만 보내고 영원히 조용하다
+ *   stubborn-cancel: solve 가 progress 를 계속 보내지만 cancel 에 **응답하지 않는다**
+ *                    (큰 플랍에서 반복 경계가 멀어 협조적 취소가 늦는 경우 — P4 R1 MINOR 5)
  *   noisy-stderr  : stderr 에 큰 덩어리를 뱉는다 (절단 검사)
  *   junk-line     : 파싱 불가 줄을 먼저 보내고 정상 응답을 이어 보낸다
  */
@@ -84,11 +86,19 @@ async function handle(req) {
   if (req.method === 'solve') {
     await emit({ method: 'progress', params: { iter: 10, exploitabilityPct: 3, pct: 0.1 } });
     if (scenario === 'silent') return; // 영원히 조용 — 클라이언트가 Stalled 로 끊어야 한다
+    if (scenario === 'stubborn-cancel') {
+      // 반복은 계속 돌지만(진행률이 살아 있으니 Stalled 도 안 뜬다) 취소에는 답하지 않는다.
+      for (let iter = 20; ; iter += 10) {
+        await delay(50);
+        await emit({ method: 'progress', params: { iter, exploitabilityPct: 3, pct: 0.2 } });
+      }
+    }
     await emit({ method: 'progress', params: { iter: 20, exploitabilityPct: 1, pct: 0.5 } });
     await emit({ id: req.id, result: { iterations: 20, exploitabilityPct: 0.4, elapsedMs: 12, bytes: 1024 } });
     return;
   }
   if (req.method === 'cancel') {
+    if (scenario === 'stubborn-cancel') return; // 응답 없음 — 클라이언트가 kill 해야 한다
     await emit({ id: req.id, result: { ok: true } });
     return;
   }

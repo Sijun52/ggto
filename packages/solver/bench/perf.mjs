@@ -28,7 +28,7 @@ const cases = [
     run: () => {
       let acc = 0;
       for (let i = 0; i < 1000; i++) {
-        acc += configHash(buildConfig({ ...REQUEST, potBb: 20 + (i % 7) })).length;
+        acc += configHash(buildConfig({ ...REQUEST, potBb: 20 + (i % 7) }), 'bench-solver').length;
       }
       return acc;
     },

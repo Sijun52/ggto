@@ -129,6 +129,13 @@ export function ChartsPage(): React.JSX.Element {
         >
           <span className="mr-1 hidden md:inline">Trainer</span>→
         </a>
+        <a
+          className={`flex items-center justify-center rounded px-2 text-sm ${TOUCH} ${TEXT_LINK}`}
+          href="/solve"
+          aria-label="Solve 로"
+        >
+          Solve
+        </a>
       </div>
       <div className="mb-2 flex flex-wrap items-center gap-2">
         <select

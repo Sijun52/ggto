@@ -132,7 +132,7 @@ export class FakeSolver implements Solver {
     }
     if (signal.aborted) throw new SolverError('Cancelled', 'cancelled');
     const bytes = this.#opts.bytes ?? 4096;
-    const hash = configHash(cfg);
+    const hash = configHash(cfg, this.id);
     const header: FakeBinHeader = {
       hash,
       iterations: steps * 10,
@@ -168,11 +168,19 @@ export class FakeSolver implements Solver {
     return {
       node: async (line: string): Promise<CanonicalNode> => {
         const dealt = parseFakeLine(cfg, line);
+        // 가짜 트리도 **스트리트를 닫는다** (P5.md 8.2): `X-X`·`B1-C`·`B2-C` 뒤는
+        // 카드가 깔릴 자리이므로 행동 노드가 아니다. 이 구분이 없으면 라우트의
+        // `ChanceNode` 400 경로를 Rust 없이 검사할 수 없다.
+        if (isFakeChance(cfg, line, dealt)) {
+          throw new SolverError('ChanceNode', `${JSON.stringify(line)} is a chance node — use the \`runouts\` method`);
+        }
         return fakeNode(cfg, seed, line, dealt);
       },
       runouts: async (line: string): Promise<CanonicalRunouts> => {
         const dealt = parseFakeLine(cfg, line);
-        if (cfg.board.length + dealt.length >= 5) throw new SolverError('NotChanceNode', 'river has no runouts');
+        if (!isFakeChance(cfg, line, dealt)) {
+          throw new SolverError('NotChanceNode', `${JSON.stringify(line)} is not a chance node`);
+        }
         return fakeRunouts(cfg, line, dealt);
       },
       close: async (): Promise<void> => undefined,
@@ -186,6 +194,15 @@ export class FakeSolver implements Solver {
 }
 
 const FAKE_ACTION_SEGS = new Set(['X', 'B1', 'B2', 'X-X', 'B1-C', 'B2-C']);
+/** 스트리트를 닫는 세그먼트 — 다음은 카드다 (리버면 터미널이라 chance 가 아니다). */
+const FAKE_CLOSING_SEGS = new Set(['X-X', 'B1-C', 'B2-C']);
+
+function isFakeChance(cfg: CanonicalConfig, line: string, dealt: readonly string[]): boolean {
+  if (line === '') return false;
+  const segs = line.split('/');
+  const last = segs[segs.length - 1] as string;
+  return FAKE_CLOSING_SEGS.has(last) && cfg.board.length + dealt.length < 5;
+}
 
 /**
  * 가짜 트리의 `line` 파서. 액션 세그먼트는 고정 목록이고, **카드 세그먼트**는 그 스트리트에
@@ -248,6 +265,7 @@ function fakeNode(cfg: CanonicalConfig, seed: number, line: string, dealt: reado
     reach: [reachOop, reachIp],
     equity: [new Float32Array(COMBO_COUNT).fill(0.5), new Float32Array(COMBO_COUNT).fill(0.5)],
     evAvgBb: [cfg.potChips / cfg.chipsPerBb / 2, cfg.potChips / cfg.chipsPerBb / 2],
+    reachable: true,
     evBasis: 'stack_delta_from_node',
   };
 }

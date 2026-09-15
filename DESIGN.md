@@ -203,22 +203,37 @@ GET /api/solve/{hash}/node?line=B6.6-C/Qc&board=Ks7h2h&oop=…&ip=…&potBb=20&s
     reach:    [<base64 f32[1326]>, <…>],
     equity:   [<base64 f32[1326]>, <…>],
     evAvgBb:  [13.74, 6.26],                // 합 = potChips/100 (P4.md 3.5)
+    reachable: true,                        // false 면 도달 질량 0 → evAvgBb 는 [0,0], 화면은 `—`
     aggregate: { strategy: number[3][169], ev: …, reach: number[2][169] },
-    evBasis: "stack_delta_from_node"
+    evBasis: "stack_delta_from_node",
+    perm: [0,1,2,3]                         // 원본→정규 슈트 순열. 항등 = 응답이 **정규 보드 공간**
   }
 ```
+
+노드 종류는 **오류 코드**로 갈린다 (D27): chance 노드는 400 `ChanceNode` (→ `runouts` 로),
+터미널은 400 `NoSuchLine`. 클라이언트가 `X-X` 를 보고 추측하지 않는다.
 
 **base64 는 전부 f32 little-endian 이다** (D7). 슈트 역순열은 `@ggto/solver` 가 응답을 만들 때
 한 번에 한다 — 서버·웹은 정규 보드를 모른다 (P4.md 2절).
 프론트는 이걸 받아서 격자를 그린다. 노드 이동 시마다 요청 + TanStack Query 캐시.
 
 ### 5.4 UI
+
+**모바일 한 열이 기본 설계 대상이다** (P3M 의 전제를 그대로 잇는다): 헤더(보드·팟·expl)
+→ 라인 바(세그먼트 브레드크럼) → 169 격자 **또는** 런아웃 히트맵 → 어그리게이트 →
+**하단 고정 액션 바**. 하단 바가 곧 다음 노드로 가는 버튼이고, P6 트레이너는 같은 자리를
+마스킹해 출제한다.
+
+![P5 포스트플랍 탐색기 — 모바일 375px](docs/assets/p5-postflop-mobile.svg)
+
+`≥ 1280` 에서는 3열이다 (한 컴포넌트 트리, 배치만 CSS):
+
 ![포스트플랍 탐색기](docs/assets/postflop-explorer-ui.svg)
 
-- 좌: 액션 트리 (브레드크럼 + 클릭 이동)
-- 중앙: 169 격자 (OOP/IP 토글)
-- 우: 어그리게이트 빈도 + EV
-- 하단: **런아웃 히트맵** — 턴/리버 49장 각각에 대한 EV/전략 변화. 이게 실제 학습에서 제일 도움 됨
+- 좌: 액션 트리 (지금까지 지나온 조상 + 그 형제 액션 — 전체 트리를 미리 받지 않는다)
+- 중앙: 169 격자 (OOP/IP 토글). chance 노드에서는 같은 자리에 **런아웃 히트맵** (49/48장,
+  카드마다 EV 편차를 대칭 정규화한 색) — 턴/리버 카드별 EV 변화가 실제 학습에서 제일 도움 된다
+- 우: 어그리게이트 빈도 + `노드 EV OOP · IP = 팟` + 에퀴티, 그 아래 액션 버튼
 
 ---
 
@@ -307,7 +322,7 @@ POST /api/range/equity         {ranges, board}       → 에퀴티/에퀴티 분
 | **P3** | 트레이너 v1 (프리플랍 전용): 출제/채점/리포트 + **SRS·리크 분석** | 매일 쓸 수 있는 앱이 됨 | 중 |
 | **P3M** | 모바일 UX: 반응형 격자 + 터치 타겟 44px + 하단 액션 바 + 리포트 카드 + `GGTO_HOST` LAN opt-in | 휴대폰으로 20문제를 한 손으로 돈다. 완료 조건: `npm run check:mobile` exit 0 | 소 |
 | **P4** | `ggto-solver`: postflop-solver 래핑 + 잡큐 + 캐시 + SSE | CLI로 솔브 돌아감. **완료 조건: `npm run ci` exit 0 (Rust 없이) 그리고 `npm run ci:solver` exit 0** | 대 |
-| **P5** | 포스트플랍 탐색 UI: 액션 트리 + 격자 + 런아웃 히트맵 | | 대 |
+| **P5** | 포스트플랍 탐색 UI: 액션 트리 + 격자 + 런아웃 히트맵 (모바일 한 열 기준) | 휴대폰에서 솔브를 만들고 라인을 타고 내려간다. 완료 조건: `npm run check:mobile` 에 `/solve` 5 화면(목록·폼·행동 노드·chance·터미널) 포함, exit 0 | 대 |
 | **P6** | 트레이너 v2: **포스트플랍 스팟** (SRS·리크 분석은 P3 에서 앞당겼다) | | 중 |
 | **P7+** | 핸드히스토리 임포트 → 자동 리뷰 (선택) | | 대 |
 

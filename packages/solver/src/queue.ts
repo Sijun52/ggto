@@ -7,6 +7,7 @@
  * 즉시 `TooLarge` 다 (사용자에게 사이징을 줄이라고 말할 수 있는 유일한 지점).
  */
 
+import { rmSync } from 'node:fs';
 import { SolverError, type CanonicalConfig, type Estimate, type ProgressEvent, type SolveSummary, type Solver } from './types.js';
 
 export type JobStatus = 'queued' | 'estimating' | 'running' | 'saving' | 'done' | 'failed' | 'cancelled';
@@ -320,6 +321,14 @@ export class JobQueue {
       this.#finish(job, 'done');
     } catch (e) {
       const err = e instanceof SolverError ? e : new SolverError('BadRequest', e instanceof Error ? e.message : String(e));
+      // 실패·취소한 잡의 `.part` 는 **여기서** 지운다 (P4 R1 MINOR 3). 기동 `repair()` 도
+      // 치우지만 그때까지 GB 단위 파일이 남고, 그 사이의 `evictFor` 계산은 그것을 못 본다
+      // (`.part` 는 인덱스에 없다). 지우기 실패는 삼키지 않고 로그로 남긴다.
+      try {
+        rmSync(job.outPath, { force: true });
+      } catch (rmError) {
+        console.error(`[ggto] leftover ${job.outPath}: ${rmError instanceof Error ? rmError.message : String(rmError)}`);
+      }
       this.#finish(job, err.code === 'Cancelled' ? 'cancelled' : 'failed', { code: err.code, message: err.message });
     }
   }

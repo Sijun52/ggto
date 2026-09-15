@@ -24,7 +24,8 @@ const BASE: SolveRequest = {
 };
 
 const req = (over: Partial<SolveRequest>): SolveRequest => ({ ...BASE, ...over });
-const hashOf = (over: Partial<SolveRequest>): string => configHash(buildConfig(req(over)));
+const SOLVER = 'test-solver@1';
+const hashOf = (over: Partial<SolveRequest>): string => configHash(buildConfig(req(over)), SOLVER);
 
 describe('P4 3.3 캐시 키 — 보드 동형 (D5 · D6)', () => {
   it('P4 3.3 슈트 대칭 레인지면 Ks7h2h · Kd7s2s · Kh7s2s 가 같은 해시다', () => {
@@ -78,7 +79,7 @@ describe('P4 3.3 캐시 키 — 보드 동형 (D5 · D6)', () => {
   });
 
   it('P4 3.3 정규 JSON 은 키 순서에 불변이고 부동소수를 hex 로 찍는다', () => {
-    const json = canonicalConfigJson(buildConfig(BASE));
+    const json = canonicalConfigJson(buildConfig(BASE), SOLVER);
     const keys = Object.keys(JSON.parse(json) as Record<string, unknown>);
     expect(keys).toEqual([...keys].sort());
     // 레인지는 10진 소수가 아니라 f32 비트 패턴이다 (플랫폼 간 toString 차이를 배제).
@@ -175,5 +176,16 @@ describe('P4 5.4 슈트 순열 왕복', () => {
     expect(() => assertCanonicalLine('B1--C')).toThrow();
     expect(() => assertCanonicalLine('B01')).toThrow(); // 선행 0 은 정규형이 아니다
     expect(() => assertCanonicalLine('B1.50')).toThrow(); // 후행 0 은 정규형이 아니다
+  });
+
+  it('P5 12 R1-9 소문자 액션 토큰은 전부 거부된다 (대문자 정규형만)', () => {
+    // R1 의 뮤턴트가 여기서 살아남았다: `ACTION_RE` 에 `i` 플래그를 붙여도 옛 테스트는
+    // `b33.c`(점 때문에 어차피 실패) 하나뿐이라 죽지 않았다. 점 없는 소문자를 박는다.
+    for (const bad of ['x', 'c', 'f', 'a', 'b6.6', 'r15', 'X-x', 'X-X/Qc/x']) {
+      expect(() => assertCanonicalLine(bad), bad).toThrow(/canonical action token/);
+    }
+    for (const good of ['X', 'C', 'F', 'A', 'B6.6', 'R15', 'X-X/Qc/X']) {
+      expect(() => assertCanonicalLine(good), good).not.toThrow();
+    }
   });
 });

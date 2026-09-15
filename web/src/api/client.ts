@@ -71,6 +71,24 @@ export async function postJson<TReq, TRes>(path: string, body: TReq): Promise<TR
   return parsed as TRes;
 }
 
+/**
+ * DELETE. 204(본문 없음) 와 202(JSON 본문) 를 둘 다 받는다 — 본문은 쓰지 않는다.
+ * `postJson` 을 쓰면 204 의 빈 본문에서 `JSON.parse('')` 가 터져 성공이 실패로 보인다.
+ */
+export async function deleteRequest(path: string): Promise<void> {
+  const res = await fetch(path, { method: 'DELETE' });
+  if (res.ok) return;
+  const raw = await res.text();
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw) as unknown;
+  } catch {
+    throw new ApiError(res.status, 'BadResponse', `server sent non-JSON (${String(res.status)})`);
+  }
+  if (isErrorEnvelope(parsed)) throw new ApiError(res.status, parsed.error.code, parsed.error.message);
+  throw new ApiError(res.status, 'BadResponse', `request failed with status ${String(res.status)}`);
+}
+
 /** 서버 응답을 화면이 쓰는 표현으로 옮긴 것. weights 는 여기서만 number[] 였다. */
 export interface ParsedRange {
   /** 정규형 에코 */

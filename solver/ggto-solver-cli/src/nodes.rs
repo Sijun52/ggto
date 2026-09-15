@@ -72,8 +72,10 @@ pub fn node_response(game: &mut PostFlopGame, line: &str, chips_per_bb: i32) -> 
         return Err(RpcError::new("NoSuchLine", format!("{:?} is a terminal node", line)));
     }
     if game.is_chance_node() {
+        // 전용 코드다 (P5.md 1.6): 프론트는 노드 종류를 **추측하지 않고** 이 코드를 보고
+        // `runouts` 로 갈아탄다 (D27). `BadRequest` 는 문법 오류와 구분이 안 됐다.
         return Err(RpcError::new(
-            "BadRequest",
+            "ChanceNode",
             format!("{:?} is a chance node — use the `runouts` method", line),
         ));
     }
@@ -99,10 +101,15 @@ pub fn node_response(game: &mut PostFlopGame, line: &str, chips_per_bb: i32) -> 
     let stack = game.tree_config().effective_stack;
     // 3.5 의 증인: 두 플레이어의 레인지 가중 평균 EV. 합이 그 노드의 팟이어야 한다.
     // 1326 배열만 주면 호출자가 이 항등식을 **검증**할 수 없다 (상대 EV 가 응답에 없다).
-    let ev_avg = [
+    let ev_avg_raw = [
         compute_average(&game.expected_values(0), game.normalized_weights(0)) * inv_bb,
         compute_average(&game.expected_values(1), game.normalized_weights(1)) * inv_bb,
     ];
+    // 도달 질량이 0 인 노드(희귀 라인)에서는 가중 평균이 0/0 = NaN 이고, serde_json 은
+    // NaN 을 **null** 로 직렬화한다 — 화면이 NaN 을 그리게 된다 (P4 R1 MINOR 11).
+    // 값이 없다는 사실을 `reachable: false` 로 말하고 숫자 자리는 0 으로 채운다.
+    let reachable = ev_avg_raw[0].is_finite() && ev_avg_raw[1].is_finite();
+    let ev_avg = if reachable { ev_avg_raw } else { [0.0f32, 0.0f32] };
     let canonical_line = lines::line_of(game, chips_per_bb)?;
 
     Ok(json!({
@@ -118,6 +125,7 @@ pub fn node_response(game: &mut PostFlopGame, line: &str, chips_per_bb: i32) -> 
         "reach": reach,
         "equity": equity,
         "evAvgBb": ev_avg,
+        "reachable": reachable,
         "evBasis": EV_BASIS,
     }))
 }

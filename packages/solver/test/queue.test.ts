@@ -5,7 +5,7 @@
  * 못 막는다: 4GB 둘과 0.5GB 둘은 같은 "2 잡" 이다.
  */
 
-import { mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -13,7 +13,13 @@ import { buildConfig } from '../src/config.js';
 import { FakeSolver } from '../src/fakeSolver.js';
 import { configHash } from '../src/hash.js';
 import { JobQueue, type JobEvent } from '../src/queue.js';
-import { SolverError, type CanonicalConfig, type SolveRequest } from '../src/types.js';
+import {
+  SolverError,
+  type CanonicalConfig,
+  type Estimate,
+  type SolveRequest,
+  type Solver,
+} from '../src/types.js';
 
 const GB = 1024 ** 3;
 
@@ -50,7 +56,7 @@ function submit(
   opts: { estimate?: { memoryBytes: number } } = {},
 ): { handle: ReturnType<JobQueue['submit']>; events: JobEvent[]; hash: string } {
   const cfg = cfgFor(board);
-  const hash = configHash(cfg);
+  const hash = configHash(cfg, 'fake');
   const events: JobEvent[] = [];
   const memory = opts.estimate?.memoryBytes;
   const handle = q.submit({
@@ -236,5 +242,42 @@ describe('P4 5.2 이벤트', () => {
       expect((progress[i]?.exploitabilityPct ?? 0) <= (progress[i - 1]?.exploitabilityPct ?? 0)).toBe(true);
       expect((progress[i]?.pct ?? 0) > (progress[i - 1]?.pct ?? 0)).toBe(true);
     }
+  });
+});
+
+// --- P5 12절 (P4 R1 MINOR 3): 실패한 잡의 `.part` 는 남지 않는다 -----------------
+
+describe('P4 5.2 실패 뒤 잔해', () => {
+  /** 파일을 쓰다가 죽는 솔버. 실제 데몬이 Stalled 로 kill 될 때와 같은 상태를 만든다. */
+  class StallingSolver implements Solver {
+    readonly id = 'stalling';
+    async estimate(): Promise<Estimate> {
+      return { nodes: 1, memoryBytes: 1024, memoryBytesCompressed: 1024, estSeconds: 1 };
+    }
+    async solve(_cfg: CanonicalConfig, opts: { outPath: string }): Promise<never> {
+      writeFileSync(opts.outPath, Buffer.alloc(4096, 3));
+      throw new SolverError('Stalled', 'no progress for 120000ms');
+    }
+    async open(): Promise<never> {
+      throw new SolverError('NotLoaded', 'nothing was saved');
+    }
+    async invalidate(): Promise<void> {
+      return undefined;
+    }
+  }
+
+  it('P5 12 R1-3 Stalled 로 실패하면 .part 파일이 남지 않는다', async () => {
+    const dir = tmp();
+    const solver = new StallingSolver();
+    const q = new JobQueue({ solver, concurrency: 1 });
+    const cfg = cfgFor('Ks7h2h');
+    const hash = configHash(cfg, solver.id);
+    const outPath = join(dir, `${hash}.bin.part`);
+    const handle = q.submit({ hash, cfg, outPath, onSaved: () => undefined });
+
+    await expect(handle.done()).rejects.toMatchObject({ code: 'Stalled' });
+    expect(handle.status).toBe('failed');
+    // 솔버는 파일을 실제로 썼다 — 큐가 지워야 한다 (기동 repair 까지 GB 가 남는다).
+    expect(existsSync(outPath)).toBe(false);
   });
 });

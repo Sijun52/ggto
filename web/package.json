@@ -6,6 +6,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
+    "bench": "node bench/perf.mjs",
     "build": "vite build",
     "dev": "vite"
   },

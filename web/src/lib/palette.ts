@@ -90,6 +90,18 @@ export const VERDICT_CHIP: Record<Verdict, string> = {
   OffStrategy: 'bg-[#94a3b8] text-[#020617]', // 7.87
 };
 
+/**
+ * 슈트 기호와 색. 클럽/스페이드는 밝은 회색·초록, 하트/다이아는 붉은·파란 계열
+ * (표준 4색이 아니다 — 어두운 배경에서 4.5:1 을 넘는 색을 골랐다).
+ * 히어로 카드와 보드 카드가 **같은 표**를 쓴다: 두 곳에 두면 색이 갈라진다.
+ */
+export const SUIT_STYLE: Readonly<Record<string, { glyph: string; className: string }>> = {
+  c: { glyph: '♣', className: 'text-[#34d399]' },
+  d: { glyph: '♦', className: 'text-[#38bdf8]' },
+  h: { glyph: '♥', className: 'text-[#f87171]' },
+  s: { glyph: '♠', className: 'text-[#f1f5f9]' },
+};
+
 // --- 면 -------------------------------------------------------------------
 
 export const SURFACE = 'bg-[#0f172a]';

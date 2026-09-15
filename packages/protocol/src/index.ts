@@ -320,6 +320,11 @@ export interface SolveRequestDto {
   board: string;
   potBb: number;
   stackBb: number;
+  /**
+   * **HTTP API 는 프리셋 이름만 받는다** (P4.md 3.2 / P5 12절 R2 MINOR 1). 커스텀 객체는
+   * `npm run solve` CLI 전용이다 — 쿼리로 표현할 수 없어 탐색기가 표기 모드로 열 수 없다.
+   * 타입에 유니온이 남아 있는 것은 CLI 와 요청 타입을 공유하기 때문이고, 라우트가 400 으로 막는다.
+   */
   sizings: SizingPresetName | SizingsDto;
   rake?: SolveRakeDto;
   targetExploitabilityPct?: number;
@@ -374,6 +379,11 @@ export interface SolveNodeResponse {
   equity: [string, string];
   /** [oop, ip] 레인지 가중 평균 EV (bb). 합 = `potChips / 100` (P4.md 3.5) */
   evAvgBb: [number, number];
+  /**
+   * 도달 질량이 0 인 노드면 `false` 이고 `evAvgBb` 는 `[0, 0]` 이다 (P4 R1 MINOR 11).
+   * 화면은 이때 숫자가 아니라 `—` 를 그린다 — 0 을 "EV 가 0" 으로 읽으면 거짓말이다.
+   */
+  reachable: boolean;
   aggregate: SolveAggregateDto;
   evBasis: 'stack_delta_from_node';
   /**

@@ -41,7 +41,27 @@ export interface UiState {
   advanceSpot: () => void;
   finishSession: () => void;
   resetSession: () => void;
+
+  // --- P5 솔브 탐색기 (P5.md 4절). 화면 상태만 — 노드 데이터는 TanStack 캐시가 정본이다 ---
+  solveHash: string | null;
+  solveLine: string;
+  /** 격자에 누구의 레인지를 그리는가. null = 행동 플레이어 (라인이 바뀌면 여기로 돌아온다) */
+  solvePlayer: 'oop' | 'ip' | null;
+  solvePhase: SolvePhase;
+  /** 진행 중인 잡 (SSE 구독 대상) */
+  solveJobId: string | null;
+  /** 히트맵에서 상태줄에 올린 카드 (2단계 탭의 1단계) */
+  runoutPick: string | null;
+  openSolve: (hash: string, line: string) => void;
+  setSolveLine: (line: string) => void;
+  setSolvePlayer: (p: 'oop' | 'ip' | null) => void;
+  setSolvePhase: (phase: SolvePhase) => void;
+  setSolveJob: (jobId: string | null) => void;
+  setRunoutPick: (card: string | null) => void;
 }
+
+/** `/solve` 한 페이지의 단계 (P5.md 3.1) */
+export type SolvePhase = 'list' | 'form' | 'running' | 'explore';
 
 /** 출제 화면(asking) → 해설 화면(revealed) 은 **같은 화면의 마스크 해제**다 (DESIGN 6.5). */
 export type TrainerPhase = 'idle' | 'asking' | 'revealed' | 'done';
@@ -103,5 +123,32 @@ export const useUiStore = create<UiState>()((set) => ({
   },
   resetSession: () => {
     set({ sessionId: null, spotIndex: 0, phase: 'idle', spotShownAt: 0 });
+  },
+
+  solveHash: null,
+  solveLine: '',
+  solvePlayer: null,
+  solvePhase: 'list',
+  solveJobId: null,
+  runoutPick: null,
+  openSolve: (solveHash, solveLine) => {
+    set({ solveHash, solveLine, solvePhase: 'explore', solvePlayer: null, runoutPick: null, selectedClass: null });
+  },
+  setSolveLine: (solveLine) => {
+    // 라인이 바뀌면 행동 플레이어로 돌아간다 (P5.md 3.2-3) — 새 노드에서 "상대" 가 누구인지
+    // 사용자가 다시 생각하게 두지 않는다. 히트맵의 1단계 탭도 무효다.
+    set({ solveLine, solvePlayer: null, runoutPick: null });
+  },
+  setSolvePlayer: (solvePlayer) => {
+    set({ solvePlayer });
+  },
+  setSolvePhase: (solvePhase) => {
+    set({ solvePhase });
+  },
+  setSolveJob: (solveJobId) => {
+    set({ solveJobId });
+  },
+  setRunoutPick: (runoutPick) => {
+    set({ runoutPick });
   },
 }));

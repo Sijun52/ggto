@@ -31,6 +31,8 @@ export interface NodeResponse {
   equity: [string, string];
   /** [oop, ip] 평균 EV (bb). 합 = `potChips / 100` (P4.md 3.5) */
   evAvgBb: [number, number];
+  /** 도달 질량 0 이면 false — `evAvgBb` 는 `[0,0]` 이고 화면은 `—` 를 그린다 (P4 R1 MINOR 11) */
+  reachable: boolean;
   aggregate: NodeAggregate;
   evBasis: 'stack_delta_from_node';
   /**
@@ -105,6 +107,7 @@ export function toNodeResponse(node: CanonicalNode, perm: SuitPerm): NodeRespons
     reach: [b64([reach[0]]), b64([reach[1]])],
     equity: [b64([equity[0]]), b64([equity[1]])],
     evAvgBb: node.evAvgBb,
+    reachable: node.reachable,
     aggregate: aggregateNode({ strategy, ev, reach, player: node.player }),
     evBasis: node.evBasis,
     perm: [perm[0], perm[1], perm[2], perm[3]],

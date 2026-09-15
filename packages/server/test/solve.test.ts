@@ -83,7 +83,7 @@ describe('P4 7 POST /api/solve', () => {
     const res = await post(app, { ...BODY, confirm: true });
     const body = (await res.json()) as { jobId: string; hash: string; status: string };
     expect(body.jobId).toMatch(/^job-/);
-    expect(body.hash).toBe(configHash(buildConfig(BODY)));
+    expect(body.hash).toBe(configHash(buildConfig(BODY), 'fake'));
 
     // 이벤트 스트림이 done 을 줄 때까지 기다린다.
     const events = await app.request(`/api/solve/${body.jobId}/events`);
@@ -368,10 +368,17 @@ describe('P4 7 node / runouts / solves', () => {
     const { hash, cache } = await solved();
     const row = cache.get(hash);
     expect(row).not.toBeNull();
-    const parsed = JSON.parse((row as { configJson: string }).configJson) as { oop: string; ip: string; v: number };
+    const parsed = JSON.parse((row as { configJson: string }).configJson) as {
+      oop: string;
+      ip: string;
+      v: number;
+      solver: string;
+    };
     expect(parsed.oop.length).toBe(1326 * 8);
     expect(parsed.ip.length).toBe(1326 * 8);
-    expect(parsed.v).toBe(1);
+    // v:2 = 해시 입력에 솔버 id 가 들어간 버전 (P4 R1 MINOR 7)
+    expect(parsed.v).toBe(2);
+    expect(parsed.solver).toBe('fake');
   });
 
   it('P4 7 GET /api/solves 가 목록과 총량을 준다', async () => {
@@ -409,5 +416,111 @@ describe('P4 7 SolverUnavailable (D24)', () => {
       body: JSON.stringify({ text: 'AA' }),
     });
     expect(parse.status).toBe(200);
+  });
+});
+
+// --- P5.md 1.6 · 12절 (P4 이월) ------------------------------------------------
+
+describe('P5 1.6 chance 노드와 쿼리 규칙', () => {
+  async function solved(): Promise<{ app: ReturnType<typeof createApp>; hash: string; solver: FakeSolver }> {
+    const { app, solver } = makeApp();
+    const body = (await (await post(app, { ...BODY, confirm: true })).json()) as { jobId: string; hash: string };
+    await (await app.request(`/api/solve/${body.jobId}/events`)).text();
+    return { app, hash: body.hash, solver };
+  }
+
+  const q = (board = 'Ks7h2h'): string =>
+    `board=${board}&oop=${encodeURIComponent(BODY.oop)}&ip=${encodeURIComponent(BODY.ip)}&potBb=20&stackBb=80`;
+
+  const err = async (res: Response): Promise<string> =>
+    ((await res.json()) as { error: { code: string } }).error.code;
+
+  it('P5 1.6 node 가 chance 노드면 400 ChanceNode 이고 같은 라인의 runouts 는 200 이다', async () => {
+    const { app, hash } = await solved();
+    // 플랍 `X-X` 는 턴 카드가 깔릴 자리다 (스트리트가 닫혔다).
+    const node = await app.request(`/api/solve/${hash}/node?line=${encodeURIComponent('X-X')}&${q()}`);
+    expect(node.status).toBe(400);
+    expect(await err(node)).toBe('ChanceNode');
+
+    const runouts = await app.request(`/api/solve/${hash}/runouts?line=${encodeURIComponent('X-X')}&${q()}`);
+    expect(runouts.status).toBe(200);
+    const body = (await runouts.json()) as { cards: { card: string }[]; board: string };
+    expect(body.cards.length).toBe(49);
+    expect(body.board).toBe('Ks7h2h');
+  });
+
+  it('P5 1.6 리버 chance(턴 카드 뒤 X-X) 도 ChanceNode 이고 행동 노드는 200 이다', async () => {
+    const { app, hash } = await solved();
+    const chance = await app.request(`/api/solve/${hash}/node?line=${encodeURIComponent('X-X/Qc/X-X')}&${q()}`);
+    expect(await err(chance)).toBe('ChanceNode');
+
+    const action = await app.request(`/api/solve/${hash}/node?line=${encodeURIComponent('X-X/Qc')}&${q()}`);
+    expect(action.status).toBe(200);
+    // 행동 노드에서 runouts 를 부르면 그 반대 코드다 — 두 코드가 프론트의 분기다.
+    const notChance = await app.request(`/api/solve/${hash}/runouts?line=${encodeURIComponent('X-X/Qc')}&${q()}`);
+    expect(await err(notChance)).toBe('NotChanceNode');
+  });
+
+  it('P5 12 R2-2 compressed 는 1/true 참, 0/false 거짓, 그 밖은 400 이다', async () => {
+    const { app, hash } = await solved();
+    // 이 솔브는 비압축이다 — `compressed=1|true` 는 다른 게임의 해시라 400 HashMismatch.
+    for (const v of ['1', 'true']) {
+      const res = await app.request(`/api/solve/${hash}/node?line=&${q()}&compressed=${v}`);
+      expect(await err(res), `compressed=${v} must be read as true`).toBe('HashMismatch');
+    }
+    for (const v of ['0', 'false']) {
+      const res = await app.request(`/api/solve/${hash}/node?line=&${q()}&compressed=${v}`);
+      expect(res.status, `compressed=${v} must be read as false`).toBe(200);
+    }
+    const bogus = await app.request(`/api/solve/${hash}/node?line=&${q()}&compressed=yes`);
+    expect(bogus.status).toBe(400);
+    expect(await err(bogus)).toBe('BadRequest');
+  });
+
+  it('P5 12 R2-3 설정 파라미터만 있고 다섯 파라미터가 없으면 400 이다', async () => {
+    const { app, hash } = await solved();
+    for (const only of ['sizings=standard', 'compressed=1', 'rakePct=5', 'rakeCapBb=3']) {
+      const res = await app.request(`/api/solve/${hash}/node?line=&${only}`);
+      expect(res.status, only).toBe(400);
+      expect(await err(res)).toBe('BadRequest');
+    }
+    // 아무 설정도 없으면 정규 모드로 200 (perm 항등) — 이 규칙은 그대로다.
+    const none = await app.request(`/api/solve/${hash}/node?line=`);
+    expect(none.status).toBe(200);
+    expect(((await none.json()) as { perm: number[] }).perm).toEqual([0, 1, 2, 3]);
+  });
+
+  it('P5 12 R2-1 POST 는 커스텀 sizings 객체를 400 OutOfRange 로 막는다 (프리셋만)', async () => {
+    const { app } = makeApp();
+    const custom = {
+      ...BODY,
+      sizings: { flop: { bet: '33%', raise: '2.5x' }, turn: { bet: '75%', raise: '2.5x' }, river: { bet: '75%', raise: '2.5x' } },
+    };
+    const res = await post(app, custom);
+    expect(res.status).toBe(400);
+    expect(await err(res)).toBe('OutOfRange');
+
+    const bogusPreset = await post(app, { ...BODY, sizings: 'huge' });
+    expect(bogusPreset.status).toBe(400);
+    expect(await err(bogusPreset)).toBe('OutOfRange');
+  });
+
+  it('P5 12 R1-4 같은 해시가 실행 중이면 두 번째 POST 가 같은 jobId 이고 estimate 를 다시 부르지 않는다', async () => {
+    const { app, solver } = makeApp({ solveMs: 120 });
+    const first = (await (await post(app, { ...BODY, confirm: true })).json()) as { jobId: string };
+    expect(solver.estimateCalls).toBe(1);
+
+    // 폼 더블탭: 아직 끝나지 않은 같은 게임을 다시 제출한다.
+    const second = (await (await post(app, { ...BODY, confirm: true })).json()) as {
+      jobId: string;
+      cached: boolean;
+      status: string;
+    };
+    expect(second.jobId).toBe(first.jobId);
+    expect(second.cached).toBe(false);
+    expect(solver.estimateCalls).toBe(1);
+    expect(solver.solveCalls).toBe(1);
+
+    await (await app.request(`/api/solve/${first.jobId}/events`)).text();
   });
 });

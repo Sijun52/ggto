@@ -44,7 +44,7 @@ function check(ok, label, detail) {
 /** 한 스팟을 풀어 캐시에 넣고 (추정, 실측) 을 돌려준다. */
 async function solveSpot(spot, street) {
   const cfg = buildConfig(spot);
-  const hash = configHash(cfg);
+  const hash = configHash(cfg, solver.id);
   const estimate = await queue.estimateOnly(cfg);
   const started = Date.now();
   const handle = queue.submit({
