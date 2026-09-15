@@ -1,6 +1,6 @@
 # P3M 스펙 — 모바일 UX (트레이너 1순위) · 다이어그램 규칙 · 다른 PC 에서 이어받기
 
-작성: ggto-architect, 2026-09-12 (P3 R1 리뷰와 같은 날). 대상: ggto-dev.
+작성: ggto-architect, 2026-09-12 (P3 R1 리뷰와 같은 날). 대상: ggto-dev. **R1 개정 (2026-09-12, `docs/reviews/P3M-round1.md`)**: 4절 터치 타겟 기준(`pointer: coarse`), 5절 대비 표(답 버튼·격자 라벨 실측 정정), 6.2 reach 패널 배치, 7절 사설 대역 규칙, 8.3-3 가시성 게이트, 12절.
 전제: `docs/specs/P3.md` (R2), `docs/reviews/P3-round1.md` (MINOR 1·2·8 이 여기로 이월), `DESIGN.md` 1절(프론트 스택)·6.5. **시작 조건: P3 APPROVED — 충족** (P3 R2 APPROVED 2026-09-12, `docs/reviews/P3-round2.md`; MAJOR 1~3 닫힘). P3 이월 항목의 P3M/P4 배분은 **13절**.
 **이 문서는 설계 전제를 하나 바꾼다**: 지금까지 UI 는 "데스크톱 브라우저, 마우스" 전제였다. 사용자는 **대부분 휴대폰으로** 쓴다. 따라서 (1) 375px 폭에서 모든 화면이 성립해야 하고, (2) 호버가 없고, (3) 트레이너의 답 버튼은 한 손 엄지로 눌러야 하며, (4) 휴대폰이 PC 의 서버에 **접속할 수 있어야** 한다 (지금은 `127.0.0.1` 바인드라 불가능하다 — 7절).
 
@@ -58,7 +58,7 @@
 ## 4. 터치 인터랙션
 
 - **호버 대체**: 상태줄은 `hover: …` 가 아니라 **`선택: <셀 요약>`** 이다 — 호버가 있는 장치(`(hover: hover)`)에서는 호버 중 셀을, 아니면 선택 셀을 보여준다. 문구의 접두는 `선택:` 하나로 통일 (테스트가 `hover:` 문자열을 더는 기대하지 않는다). 탭 = `onClick` 선택 (이미 동작) — 터치 시작 시 `onMouseMove` 가 호버를 먼저 바꾸는 부작용을 막기 위해 `pointer: coarse` 에서는 `onHover` 를 붙이지 않는다.
-- **터치 타겟 44×44**: `< md` 에서 모든 `button`/`a`/`input`/`select`/`label` 의 히트 영역 ≥ 44×44 CSS px (`min-h-11` + 충분한 패딩; 인라인 링크는 블록 버튼으로). 격자 셀(25px)은 예외 — 대신 선택 결과가 상태줄에 ≥ 14px 로 나온다.
+- **터치 타겟 44×44**: **`< md` 이거나 `(pointer: coarse)` 인** 장치에서 모든 `button`/`a`/`input`/`select`/`label` 의 히트 영역 ≥ 44×44 CSS px (`min-h-11` + 충분한 패딩; 인라인 링크는 블록 버튼으로). 폭만 보면 안 된다 — `md` 가 정확히 768 이라 세로 태블릿(768×1024, 손가락)이 데스크톱 밀도로 떨어진다 (R1 실측: touch 768 에서 10개가 20px). Tailwind `pointer-coarse:` 변형으로 `md:` 해제를 되돌린다. 격자 셀(25px)은 예외 — 대신 선택 결과가 상태줄에 ≥ 14px 로 나온다.
 - **트레이너 하단 고정 바** (`data-testid="action-bar"`): `position: sticky; bottom: 0`, 불투명 배경, `padding-bottom: env(safe-area-inset-bottom)`, 높이 ≥ 64px. 출제 중: 답 버튼들이 바를 **균등 분할** (`flex-1`, 높이 48px, 16px 굵은 글씨, 색 = `actionColors`, 글자 `slate-950` — 대비 red 5.36 / green 8.85 측정). 답 후: 왼쪽에 verdict 칩 + `EV loss x.xxbb`, 아래 전폭 **"다음 →"** (48px). 데스크톱(≥ md)에서는 바가 아니라 우측 열 상단의 같은 컴포넌트다 (하나의 `AnswerBar` 컴포넌트, 배치만 CSS).
   - **엄지 범위 판단**: 맞다. 375×812 세로에서 하단 1/4 (y ≥ 609) 이 한 손 엄지 도달 범위이고, 답 버튼과 "다음" 이 거기 있어야 20문제를 한 손으로 돈다. 격자는 보기만 하므로 위에 있어도 된다.
   - **오탭 방지**: 답 → 공개 전환 직후 같은 자리에 "다음" 이 나타나면 두 번 탭한 손가락이 verdict 를 못 보고 넘긴다. "다음" 은 공개 후 **500ms 동안 비활성** (`disabled` + 흐림). 답 버튼은 답 후 비활성 유지 (P3 8.2).
@@ -82,8 +82,8 @@
 | Mistake 칩 | `orange-50 / orange-600` | 3.35 | 미달 | `orange-950 / orange-400` |
 | Blunder 칩 | `red-50 / red-600` | 4.41 | 미달 | `red-50 / red-700` 또는 `red-950 / red-400` |
 | "다음" | `sky-50 / sky-600` | 3.84 | 미달 | `sky-950 / sky-400` |
-| 답 버튼 | `slate-950 / actionColors` | 5.36 (red) · 8.85 (green) | OK | 유지. 보라 폴백 `#a855f7` 도 측정해 4.5 이상 확인 |
-| 격자 라벨 | `#e2e8f0 / base` · `#0b1220 / fill` | 11.9 · 4.98 | OK | 유지. `labelDim #64748b / #111827` 3.73 은 레인지 밖 셀이라 허용 (정보성 아님) |
+| 답 버튼 | `slate-950 / actionColors` | **F `#64748b` 4.24 · A `#dc2626` 4.18** (R1 재측정 — 원래 표의 5.36 은 램프 끝 `#ef4444` 였다) | **미달** | 글자색을 배경에서 유도: `bestTextOn(color)` = 검정/흰색 중 대비 큰 쪽. F 흰색 4.76 · A 흰색 4.83 · C `#10b981` 검정 8.28 · X `#38bdf8` 검정 9.80 · 폴백 `#a855f7` 검정 5.31 |
+| 격자 라벨 | `#e2e8f0 / base` · `#0b1220 / fill` | 11.9 (base) · **A 위 3.88 · F 위 3.93** (R1 재측정) | base OK · fill **미달** | 채움 위 라벨도 `bestTextOn(라벨 중심 y 를 덮는 레이어의 색)`. 최대 레이어가 아니라 **라벨 밑 레이어** 기준 (R1 MINOR 2). `labelDim #64748b / #111827` 3.73 은 레인지 밖 셀이라 허용 (정보성 아님) |
 
 새 색은 개발 에이전트가 **같은 공식으로 측정해 표로 보고**한다 (리뷰어 스크립트와 같은 relative-luminance 공식). 색 이름은 `web/src/lib/palette.ts` 하나에 모은다 (`GradeBox`·`SessionForm`·`ReportPanel` 의 흩어진 클래스 문자열 제거).
 
@@ -98,7 +98,7 @@
 
 ### 6.2 Charts
 - 컨트롤 줄들 (`select`, 포지션, 라인, 다음, 모드) 전부 `min-h-11`, 줄바꿈 허용. `select` 는 전폭.
-- 격자 (3절), 우측 패널(콤보/리치)은 `< md` 에서 격자 아래, 콤보 패널은 접힘 기본.
+- 격자 (3절). **콤보 패널**은 모든 폭에서 접힘 + 격자 아래 (D20). **reach 패널**은 D20 대상이 아니다: `< md` 에서만 격자 아래, **`≥ md` 에서는 격자 오른쪽 열** (P2 배치 유지 — R1 MAJOR 2: 아래로 내리면 1280×720 에서 top 813 으로 화면 밖이고 오른쪽 700px 이 빈다).
 - reach 모드의 포지션 행도 44px.
 
 ### 6.3 Range
@@ -113,8 +113,14 @@
 
 ## 7. 휴대폰에서 접속 — `GGTO_HOST` (DECISIONS D19)
 
-- `packages/server/src/main.ts`: `HOST = process.env.GGTO_HOST ?? '127.0.0.1'`. 값이 루프백이 아니면 기동 로그에 **경고 한 줄** (`인증이 없다 — 신뢰하는 LAN 에서만`) 과 `os.networkInterfaces()` 의 IPv4 주소들로 `http://<ip>:7777` 목록을 찍는다. 스크립트 `npm run start:lan` = `GGTO_HOST=0.0.0.0 npm start` (Windows 에서도 되도록 `cross-env` 를 쓰지 않고 `node -e` 래퍼나 `scripts/start-lan.mjs` 로).
-- 설계 근거: DESIGN 1절 "127.0.0.1 바인드, 인증 없음" 은 유지 (기본값). LAN 노출은 **명시적 opt-in** 이고 문서에 위험을 적는다. Tailscale 류는 사용자 선택이며 스펙 밖.
+- `packages/server/src/main.ts`: `HOST = process.env.GGTO_HOST ?? '127.0.0.1'`. 값이 루프백이 아니면 기동 로그에 **경고 한 줄** (`인증이 없다 — 신뢰하는 LAN 에서만`) 과 `os.networkInterfaces()` 의 **사설 대역** IPv4 주소들로 `http://<ip>:7777` 목록을 찍는다. 스크립트 `npm run start:lan` (Windows 에서도 되도록 `cross-env` 를 쓰지 않고 `scripts/start-lan.mjs` 로).
+- **"LAN" 은 코드가 판정한다 (R1 MAJOR 1 → 개정).** 개발 PC 의 유일한 IPv4 가 공인 `/26` (연결 프로필 Public) 이었다 — `0.0.0.0` 은 그 PC 에서 인터넷 바인드다. 규칙:
+  1. 사설 = `10/8`, `172.16/12`, `192.168/16`. `100.64/10` 은 "오버레이(Tailscale)" 로 따로 표기. `169.254/16` 링크로컬은 제외. 그 밖은 **공인** — 로그에 찍지 않는다.
+  2. `start-lan.mjs`: 사설 IPv4 가 없으면 **기동 거부** (발견된 주소·대역을 찍고 exit 1). 있으면 `0.0.0.0` 이 아니라 **첫 사설 주소에 바인드**, 여러 개면 목록을 찍고 `GGTO_HOST` 로 고르게 한다.
+  3. `main.ts`: `GGTO_HOST` 가 `0.0.0.0`/`::` 인데 인터페이스에 공인 IPv4 가 있으면 `GGTO_ALLOW_PUBLIC=1` 없이는 기동 거부.
+  4. 대역 분류와 바인드 결정은 순수 함수로 분리해 `packages/server/test` 표 테스트 (`10.0.0.1 private`, `61.82.129.232 public`, `100.100.1.1 overlay`, `169.254.1.1 excluded`). 이 테스트 파일은 P3M 의 `packages/*` 예외(`main.ts` host) 에 포함된다.
+  5. README/HANDOFF: "방화벽이 물어보면 '개인 네트워크' 만 허용" 을 지우고, `Get-NetConnectionProfile` 로 **Private 인지 먼저 확인**하라고 쓴다. Public 이면 `start:lan` 을 쓰지 말 것.
+- 설계 근거: DESIGN 1절 "127.0.0.1 바인드, 인증 없음" 은 유지 (기본값). LAN 노출은 **명시적 opt-in** 이고 문서에 위험을 적는다. Tailscale 류는 사용자 선택이며 스펙 밖. D19 에 "사설 대역만, 공인 주소 감지 시 거부" 를 추가한다.
 - DoD: 같은 Wi‑Fi 의 휴대폰에서 `/trainer` 20문제 완주 (리뷰어는 `resize_window` 로 대신하되, 개발 에이전트는 실기기 스크린샷 1장 `P3M-phone-*.png` 를 첨부 — 없으면 이유).
 
 ## 8. 테스트 · DoD
@@ -141,7 +147,7 @@
 ### 8.3 데스크톱 회귀 게이트 (`tools/shots/desktop.mjs`, 1280×720 **과** 1500×1000)
 1. 캔버스 520px, 우측 열 격자 옆 (`grade-box.left > canvas.right`).
 2. 답 후 `grade-verdict`·`next-spot` 이 스크롤 0 에서 뷰포트 안 — **1280×720 에서도** (P3 R1 MINOR 1).
-3. 뷰어: 셀 클릭 → 콤보 패널이 접힘 헤더로 나타나고 펼치면 격자 아래. reach 모드 패널 동작 (P2 R1 MINOR 3 테스트 유지).
+3. 뷰어: 셀 클릭 → 콤보 패널이 접힘 헤더로 나타나고 펼치면 격자 아래. reach 모드 패널 동작 (P2 R1 MINOR 3 테스트 유지) **그리고 가시성**: 1280×720 스크롤 0 에서 `reach-panel` 의 `top ≥ 0 && bottom ≤ 720` 이고 `left > canvas.right` (R1 개정 — 행 수만 세던 검사가 MAJOR 2 를 놓쳤다).
 4. 기존 web 테스트 73 (P3 R2 기준; R1 표의 90 은 trainer 와 라벨이 바뀐 것) + 신규 전부 통과, `npm run ci` exit 0. 스크린샷 `P3M-desktop-1280-revealed.png`, `P3M-desktop-1500-revealed.png` 를 P3 스크린샷과 나란히.
 
 ### 8.4 Definition of Done
@@ -187,7 +193,7 @@ P3 R1 에서 `git clone → npm install → npm run ci → npm run seed` 를 실
 - Browser 도구 `resize_window` `mobile`/`tablet`/`desktop` 세 프리셋 × 3 페이지 × (출제·답 후). `innerWidth`/`scrollWidth`/타겟 크기/verdict 가시성 을 JS 로 잰다 (8.2 와 같은 식).
 - 하단 바에서 답 → 500ms 안에 "다음" 을 눌러도 넘어가지 않는다.
 - 대비 표 재측정 (`palette.ts` 의 실제 hex 로).
-- `GGTO_HOST=0.0.0.0` 기동 로그에 LAN URL 과 경고, 기본 기동은 여전히 `127.0.0.1` 만 (`netstat -ano | findstr 7777`).
+- `start:lan` 기동 로그에 **사설** LAN URL 과 경고, 기본 기동은 여전히 `127.0.0.1` 만 (`netstat -ano | findstr 7777`). `Get-NetIPAddress -AddressFamily IPv4` 로 이 PC 의 주소가 공인이면 `start:lan` 이 **거부**되는지, `GGTO_HOST=0.0.0.0` 이 `GGTO_ALLOW_PUBLIC` 없이 거부되는지.
 - `tools/shots/*.mjs` 가 새 클론에서 `GGTO_CHROME` 만 주면 도는지.
 
 ## 13. P3 이월 항목 — P3M 에서 처리 / P4 이후로 미룸 (P3 R2 APPROVED 시점 확정)
