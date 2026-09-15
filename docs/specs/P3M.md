@@ -1,6 +1,6 @@
 # P3M 스펙 — 모바일 UX (트레이너 1순위) · 다이어그램 규칙 · 다른 PC 에서 이어받기
 
-작성: ggto-architect, 2026-09-12 (P3 R1 리뷰와 같은 날). 대상: ggto-dev. **R1 개정 (2026-09-12, `docs/reviews/P3M-round1.md`)**: 4절 터치 타겟 기준(`pointer: coarse`), 5절 대비 표(답 버튼·격자 라벨 실측 정정), 6.2 reach 패널 배치, 7절 사설 대역 규칙, 8.3-3 가시성 게이트, 12절.
+작성: ggto-architect, 2026-09-12 (P3 R1 리뷰와 같은 날). 대상: ggto-dev. **R1 개정 (2026-09-12, `docs/reviews/P3M-round1.md`)**: 4절 터치 타겟 기준(`pointer: coarse`), 5절 대비 표(답 버튼·격자 라벨 실측 정정), 6.2 reach 패널 배치, 7절 사설 대역 규칙, 8.3-3 가시성 게이트, 12절. **R2 개정 (2026-09-16, `docs/reviews/P3M-round2.md` — APPROVED)**: 2절·8.4-8 `packages/*` 예외에 `netAddr.ts` 포함, 4절 답 후 `< md` 답 버튼 숨김, 7절 R2 주석 (MINOR 1~3 → P4), 13절 R2 이월 표.
 전제: `docs/specs/P3.md` (R2), `docs/reviews/P3-round1.md` (MINOR 1·2·8 이 여기로 이월), `DESIGN.md` 1절(프론트 스택)·6.5. **시작 조건: P3 APPROVED — 충족** (P3 R2 APPROVED 2026-09-12, `docs/reviews/P3-round2.md`; MAJOR 1~3 닫힘). P3 이월 항목의 P3M/P4 배분은 **13절**.
 **이 문서는 설계 전제를 하나 바꾼다**: 지금까지 UI 는 "데스크톱 브라우저, 마우스" 전제였다. 사용자는 **대부분 휴대폰으로** 쓴다. 따라서 (1) 375px 폭에서 모든 화면이 성립해야 하고, (2) 호버가 없고, (3) 트레이너의 답 버튼은 한 손 엄지로 눌러야 하며, (4) 휴대폰이 PC 의 서버에 **접속할 수 있어야** 한다 (지금은 `127.0.0.1` 바인드라 불가능하다 — 7절).
 
@@ -41,7 +41,7 @@
 | 새 npm 의존성 | **없음**. `ResizeObserver`·`matchMedia('(pointer: coarse)')`·`env(safe-area-inset-bottom)` 은 브라우저 내장 |
 | 스크린샷·레이아웃 검사 도구 | `tools/shots/` 워크스페이스가 아닌 **스크립트 디렉터리** (`tools/shots/mobile.mjs`, `tools/shots/desktop.mjs`): headless Chrome + CDP, Node 24 전역 `WebSocket`/`fetch` 만 (P2·P3 리뷰 스크래치의 `shot.mjs`/`drive.mjs`/`mobile-shot.mjs` 를 레포로 옮긴 것). Chrome 경로는 `GGTO_CHROME` 환경변수, 기본은 Windows 표준 경로 2개 탐색. `npm run check:mobile` 로 실행. **`ci` 에는 넣지 않는다** (Chrome 은 개발 환경 의존) |
 | 서버 바인드 | `GGTO_HOST` 환경변수 (7절). 기본값 `127.0.0.1` 유지 |
-| 도메인 코드 | `packages/*` 는 **건드리지 않는다** (7절 `main.ts` 의 host 만 예외). P3M 은 `web/src` + `tools/shots` + 문서다 |
+| 도메인 코드 | `packages/*` 는 **건드리지 않는다** — 예외는 7절뿐: `packages/server/src/main.ts` 의 host 판정, **(R2) `packages/server/src/netAddr.ts` (대역 분류·바인드 판정 순수 함수) 와 `packages/server/test/netAddr.test.ts`**. `main.ts` 는 import 만으로 DB 를 열고 `serve` 를 부르는 진입점이라 표 테스트가 import 할 수 없어 순수 함수를 따로 둔다 (R1-4 와 옛 2절의 충돌은 이 개정으로 해소). core/preflop/trainer 는 무변경. P3M 은 `web/src` + `tools/shots` + 문서다 |
 
 ## 3. 반응형 전략
 
@@ -61,7 +61,7 @@
 - **터치 타겟 44×44**: **`< md` 이거나 `(pointer: coarse)` 인** 장치에서 모든 `button`/`a`/`input`/`select`/`label` 의 히트 영역 ≥ 44×44 CSS px (`min-h-11` + 충분한 패딩; 인라인 링크는 블록 버튼으로). 폭만 보면 안 된다 — `md` 가 정확히 768 이라 세로 태블릿(768×1024, 손가락)이 데스크톱 밀도로 떨어진다 (R1 실측: touch 768 에서 10개가 20px). Tailwind `pointer-coarse:` 변형으로 `md:` 해제를 되돌린다. 격자 셀(25px)은 예외 — 대신 선택 결과가 상태줄에 ≥ 14px 로 나온다.
 - **트레이너 하단 고정 바** (`data-testid="action-bar"`): `position: sticky; bottom: 0`, 불투명 배경, `padding-bottom: env(safe-area-inset-bottom)`, 높이 ≥ 64px. 출제 중: 답 버튼들이 바를 **균등 분할** (`flex-1`, 높이 48px, 16px 굵은 글씨, 색 = `actionColors`, 글자 `slate-950` — 대비 red 5.36 / green 8.85 측정). 답 후: 왼쪽에 verdict 칩 + `EV loss x.xxbb`, 아래 전폭 **"다음 →"** (48px). 데스크톱(≥ md)에서는 바가 아니라 우측 열 상단의 같은 컴포넌트다 (하나의 `AnswerBar` 컴포넌트, 배치만 CSS).
   - **엄지 범위 판단**: 맞다. 375×812 세로에서 하단 1/4 (y ≥ 609) 이 한 손 엄지 도달 범위이고, 답 버튼과 "다음" 이 거기 있어야 20문제를 한 손으로 돈다. 격자는 보기만 하므로 위에 있어도 된다.
-  - **오탭 방지**: 답 → 공개 전환 직후 같은 자리에 "다음" 이 나타나면 두 번 탭한 손가락이 verdict 를 못 보고 넘긴다. "다음" 은 공개 후 **500ms 동안 비활성** (`disabled` + 흐림). 답 버튼은 답 후 비활성 유지 (P3 8.2).
+  - **오탭 방지**: 답 → 공개 전환 직후 같은 자리에 "다음" 이 나타나면 두 번 탭한 손가락이 verdict 를 못 보고 넘긴다. "다음" 은 공개 후 **500ms 동안 비활성** (`disabled` + 흐림). 답 버튼: `≥ md` 에서는 답 후 비활성 유지 (P3 8.2). **(R2) `< md` 에서는 답 후 답 버튼 줄을 숨긴다** (`hidden md:flex`) — 남겨 두면 바가 157px 이 되어 격자 아래 액션표 행(614–690)을 스크롤 0 에서 가리고, 32px 칩으로 줄여도 바 141 로 19px 가리며 8.2-3 (모든 버튼 ≥ 44) 을 깬다. 고른 액션은 `grade-summary` "당신: F (0%)" 와 액션표 `←` 에 남는다. 게이트는 8.2-5 의 R1 MINOR 1 항목 (액션표 bottom ≤ 바 top).
 - **키보드 `1..n`** 유지 (데스크톱). **스와이프 없음** — 좌우 스와이프는 브라우저 뒤로가기와 충돌하고 오답을 만든다.
 - **탭 지연**: `touch-action: manipulation` 을 버튼·캔버스에 줘 300ms 더블탭 지연을 없앤다.
 
@@ -120,6 +120,7 @@
   3. `main.ts`: `GGTO_HOST` 가 `0.0.0.0`/`::` 인데 인터페이스에 공인 IPv4 가 있으면 `GGTO_ALLOW_PUBLIC=1` 없이는 기동 거부.
   4. 대역 분류와 바인드 결정은 순수 함수로 분리해 `packages/server/test` 표 테스트 (`10.0.0.1 private`, `61.82.129.232 public`, `100.100.1.1 overlay`, `169.254.1.1 excluded`). 이 테스트 파일은 P3M 의 `packages/*` 예외(`main.ts` host) 에 포함된다.
   5. README/HANDOFF: "방화벽이 물어보면 '개인 네트워크' 만 허용" 을 지우고, `Get-NetConnectionProfile` 로 **Private 인지 먼저 확인**하라고 쓴다. Public 이면 `start:lan` 을 쓰지 말 것.
+  6. **(R2 확정)** 구현은 `packages/server/src/netAddr.ts` (`classifyIpv4`/`classifyIpv6`/`classifyHost`/`lanCandidates`/`publicAddrs`/`decideBind`/`chooseLanHost`). 추가 규칙: IP 리터럴이 아닌 호스트명은 `localhost` 만 허용하고 나머지는 거부 (대역을 증명할 수 없다); `start:lan` 은 `GGTO_HOST=0.0.0.0`/`::` 도 거부한다 (사설 주소 하나에만 바인드). R2 리뷰가 찾은 결함 셋은 P4 첫 커밋 (P4.md 12절): `classifyIpv6` 첫 그룹 `padEnd`→`padStart` (`fc::1` 이 private 로 오분류, 보안 영향 없음), `lanCandidates` 정렬에 `private < overlay` 추가, `0.0.0.0` 은 IPv4 공인만 세기.
 - 설계 근거: DESIGN 1절 "127.0.0.1 바인드, 인증 없음" 은 유지 (기본값). LAN 노출은 **명시적 opt-in** 이고 문서에 위험을 적는다. Tailscale 류는 사용자 선택이며 스펙 밖. D19 에 "사설 대역만, 공인 주소 감지 시 거부" 를 추가한다.
 - DoD: 같은 Wi‑Fi 의 휴대폰에서 `/trainer` 20문제 완주 (리뷰어는 `resize_window` 로 대신하되, 개발 에이전트는 실기기 스크린샷 1장 `P3M-phone-*.png` 를 첨부 — 없으면 이유).
 
@@ -158,7 +159,7 @@
 5. 7절: `GGTO_HOST` + `start:lan` + 기동 로그 + README 한 단락 (위험 고지). 실기기 스크린샷 1장 또는 사유.
 6. 9절 핸드오프 항목 (H1~H5) 처리 표.
 7. 10절 다이어그램 규칙 적용: `DESIGN.md` 2절 아키텍처 ASCII 블록 → `docs/assets/architecture.svg` 참조로 교체 (파일은 이미 있다), D18·D19 기록.
-8. 새 의존성 0. `packages/*` 변경은 `main.ts` host 뿐 (diff 로 증명).
+8. 새 의존성 0. `packages/*` 변경은 `server/src/main.ts` host 판정 + **(R2) `server/src/netAddr.ts` + `server/test/netAddr.test.ts`** 뿐 (diff 로 증명 — R2 리뷰 `git diff --stat 6a99d4c..44e7e72`).
 
 ## 9. 다른 PC 에서 이어받기 (요구 3)
 
@@ -216,4 +217,17 @@ P3 R1 에서 `git clone → npm install → npm run ci → npm run seed` 를 실
 | P3 R2 MINOR 4 | 개발 PC 작업 트리 `i/lf w/crlf` 4파일 | **지금** | `git checkout -- .` (커밋 없음) |
 
 P3M DoD 에 추가되는 것은 R1 MINOR 4 의 가드 하나뿐이다 (8.1 마지막 항목). 나머지 P3M 항목은 이미 3·5·8절에 들어 있다.
+
+**(R2) P3M 자체 이월 — 전부 P4 첫 커밋 (`docs/specs/P4.md` 12절이 정본)**
+
+| 출처 | 항목 | 어디서 어떻게 |
+|---|---|---|
+| P3M R1 MINOR 4 | `tools/shots/lib/server.mjs` 가 7777 의 아무 프로세스나 쓴다 | 기본 자체 기동, 기존 서버는 `GGTO_BASE_URL` 명시로만. Chrome 후보에 macOS/Linux 경로 |
+| P3M R1 MINOR 5 | `check:*` 가 커밋된 PNG 를 덮어쓴다 | 기본 출력 `tools/shots/out/` (gitignore), `--publish` 로만 `docs/reviews/assets` |
+| P3M R1 MINOR 6 / R2 MINOR 7 | README "테스트 480개" (실제 550) | 숫자 제거, `npm test` 로 대체 |
+| P3M R2 MINOR 1 | `classifyIpv6` `padEnd` → `padStart` | 표에 `fc::1`/`fe8::1`/`2::1` → public 추가 |
+| P3M R2 MINOR 2 | `lanCandidates` 정렬 `private < overlay` | Tailscale 먼저 열거되는 PC 케이스 표 테스트 |
+| P3M R2 MINOR 3 | `decideBind` `0.0.0.0` 은 IPv4 공인만 센다 | `HOME_ROUTER + 2001:db8::` 케이스 (`0.0.0.0 ok`, `:: 거부`) |
+| P3M R2 MINOR 4 | 768~829px reach 토글 후 ~1.2s 패널이 격자를 24px 덮음 | 원인 규명(UNCERTAIN 1) + `mobile.mjs` 태블릿 reach 게이트 |
+| P3M R2 MINOR 6 | 개발 에이전트 잔여 서버 프로세스 (7777·7811) | 라운드 종료 시 정리 |
 
