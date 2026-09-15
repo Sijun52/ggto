@@ -8,7 +8,7 @@
 
 import { DatabaseSync } from 'node:sqlite';
 import { migrate } from './schema.js';
-import { dueCapAt, type SrsState } from './srs.js';
+import { dueCapAt, DAY_MS, MAX_INTERVAL_DAYS, type SrsState } from './srs.js';
 import type { Category, GradedBy, Verdict } from './types.js';
 
 export interface SessionRow {
@@ -94,6 +94,31 @@ export class TrainerStore {
     if (path !== ':memory:') this.#db.exec('PRAGMA journal_mode = WAL');
     this.#db.exec('PRAGMA foreign_keys = ON');
     migrate(this.#db);
+    this.#clampRunawayIntervals();
+  }
+
+  /**
+   * 상한(`MAX_INTERVAL_DAYS`) 도입 **전에** 저장된 폭주 행을 되돌린다 (P3 R2 MINOR 3).
+   *
+   * 상한이 없던 빌드에서 Perfect 를 16번 받은 스팟은 `interval_days` 가 1.2e8 까지 자랐고
+   * `due_at = now + interval × 86_400_000` 이 2^53 을 넘어 `node:sqlite` 가 정수를 잃는다.
+   * 새 코드는 더 이상 그런 값을 **쓰지** 않지만 이미 쓰인 행은 영원히 due 가 되지 않아
+   * 그 스팟이 SRS 큐에서 사라진다. 스키마 변경이 아니라 **데이터 보정**이므로
+   * `user_version` 은 건드리지 않는다 — 멱등이고 (두 번째 실행은 0행), 정상 DB 에서는
+   * 조건에 걸리는 행이 없어 비용이 인덱스 없는 스캔 한 번뿐이다.
+   */
+  #clampRunawayIntervals(): void {
+    const info = this.#db
+      .prepare(
+        `UPDATE srs_state
+            SET interval_days = ?,
+                due_at = updated_at + ?
+          WHERE interval_days > ?`,
+      )
+      .run(MAX_INTERVAL_DAYS, MAX_INTERVAL_DAYS * DAY_MS, MAX_INTERVAL_DAYS);
+    if (Number(info.changes) > 0) {
+      console.error(`[ggto] srs_state 폭주 행 ${String(Number(info.changes))}개를 ${String(MAX_INTERVAL_DAYS)}일로 보정했다`);
+    }
   }
 
   createSession(args: { createdAt: number; seed: number; count: number; filter: string }): number {

@@ -71,6 +71,18 @@ const IPV6_TABLE: [string, AddrKind][] = [
   ['2001:db8::1', 'public'],
   ['2400:cb00::1', 'public'],
   ['fb00::1', 'public'],
+  // 짧은 첫 그룹 — 압축 표기는 **앞** 0 을 생략하므로 `fc::1` = `00fc::1` = `::/8` 예약이다.
+  // 공인도 사설도 아니지만 우리 분류는 fail-closed 로 `public` (= 안내에 쓰지 않는다). P3M R2 MINOR 1.
+  ['fc::1', 'public'],
+  ['fd::1', 'public'],
+  ['fe8::1', 'public'],
+  ['2::1', 'public'],
+  ['f::1', 'public'],
+  // 대조: 네 자리로 적힌 진짜 ULA/링크로컬은 그대로여야 한다
+  ['00fc::1', 'public'],
+  ['0fe8::1', 'public'],
+  ['fc00::1', 'private'],
+  ['fe80::1', 'link-local'],
   ['nonsense', 'unknown'],
 ];
 
@@ -118,6 +130,21 @@ const TAILSCALE_ONLY: InterfaceAddr[] = [
   { address: '100.100.1.1', family: 'IPv4', internal: false },
 ];
 
+/** Windows 에서 흔한 열거 순서: Tailscale 어댑터가 이더넷보다 **먼저** 나온다 (P3M R2 MINOR 2) */
+const TAILSCALE_FIRST: InterfaceAddr[] = [
+  { address: '127.0.0.1', family: 'IPv4', internal: true },
+  { address: '100.100.1.1', family: 'IPv4', internal: false },
+  { address: 'fd7a:115c:a1e0::1', family: 'IPv6', internal: false },
+  { address: '192.168.0.17', family: 'IPv4', internal: false },
+];
+
+/** ISP 가 글로벌 IPv6 를 주는 가정집: 사설 IPv4 + 공인 IPv6 (P3M R2 MINOR 3) */
+const HOME_ROUTER_V6: InterfaceAddr[] = [
+  { address: '127.0.0.1', family: 'IPv4', internal: true },
+  { address: '192.168.0.17', family: 'IPv4', internal: false },
+  { address: '2001:db8::abcd', family: 'IPv6', internal: false },
+];
+
 describe('P3M 7 netAddr — lanCandidates / publicAddrs', () => {
   it('P3M 7 공인만 있는 PC 는 안내할 LAN 주소가 없다', () => {
     expect(lanCandidates(PUBLIC_ONLY)).toEqual([]);
@@ -129,6 +156,15 @@ describe('P3M 7 netAddr — lanCandidates / publicAddrs', () => {
   });
   it('P3M 7 오버레이(100.64/10) 도 후보다', () => {
     expect(lanCandidates(TAILSCALE_ONLY).map((a) => [a.address, a.kind])).toEqual([['100.100.1.1', 'overlay']]);
+  });
+  it('P4 12 (P3M R2 MINOR 2) Tailscale 이 먼저 열거돼도 사설 IPv4 가 첫 후보다', () => {
+    // family 만 보는 정렬이면 100.100.1.1 이 첫 후보가 되어 같은 Wi-Fi 의 휴대폰이 못 닿는다.
+    expect(lanCandidates(TAILSCALE_FIRST).map((a) => a.address)).toEqual([
+      '192.168.0.17',
+      'fd7a:115c:a1e0::1',
+      '100.100.1.1',
+    ]);
+    expect(chooseLanHost(TAILSCALE_FIRST, undefined)).toMatchObject({ ok: true, host: '192.168.0.17' });
   });
   it('P3M 7 describe 는 대역 라벨을 붙여 전부 나열한다 (internal 제외)', () => {
     expect(describeAddrs(PUBLIC_ONLY)).toEqual([
@@ -166,6 +202,23 @@ describe('P3M 7 netAddr — decideBind', () => {
   it('P3M 7 사설 주소 바인드는 허용된다', () => {
     expect(decideBind({ host: '192.168.0.17', addrs: HOME_ROUTER, allowPublic: false }).ok).toBe(true);
     expect(decideBind({ host: 'fd00::1', addrs: HOME_ROUTER, allowPublic: false }).ok).toBe(true);
+  });
+  it('P4 12 (P3M R2 MINOR 3) 0.0.0.0 은 공인 IPv6 를 열지 않으므로 허용된다', () => {
+    const d = decideBind({ host: '0.0.0.0', addrs: HOME_ROUTER_V6, allowPublic: false });
+    expect(d.ok).toBe(true);
+    // 경고용 노출 목록에는 그대로 남는다 (기동은 막지 않는다)
+    if (d.ok) expect(d.exposedPublic).toEqual(['2001:db8::abcd (IPv6)']);
+  });
+  it('P4 12 (P3M R2 MINOR 3) :: 는 IPv6 공인까지 세므로 거부된다', () => {
+    const d = decideBind({ host: '::', addrs: HOME_ROUTER_V6, allowPublic: false });
+    expect(d.ok).toBe(false);
+    if (!d.ok) expect(d.detail).toEqual(['2001:db8::abcd (IPv6)']);
+  });
+  it('P4 12 (P3M R2 MINOR 3) 0.0.0.0 은 공인 IPv4 가 있으면 여전히 거부된다', () => {
+    const mixed: InterfaceAddr[] = [...HOME_ROUTER_V6, { address: '61.82.129.232', family: 'IPv4', internal: false }];
+    const d = decideBind({ host: '0.0.0.0', addrs: mixed, allowPublic: false });
+    expect(d.ok).toBe(false);
+    if (!d.ok) expect(d.detail).toEqual(['61.82.129.232 (IPv4)']);
   });
   it('P3M 7 대역을 증명할 수 없는 호스트명은 거부된다', () => {
     const d = decideBind({ host: 'my-pc.lan', addrs: HOME_ROUTER, allowPublic: false });

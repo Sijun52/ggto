@@ -31,6 +31,37 @@ export interface AppOptions {
    * 이 아니다 (세션을 만들 수 없는 것은 장애다).
    */
   trainer?: TrainerService | null;
+  /** 에러 로그 스로틀의 시계 (테스트 주입). 기본 `Date.now` */
+  now?: () => number;
+}
+
+/** 같은 (code, message) 스택을 다시 찍기까지의 최소 간격 (P3 R1 MINOR 5) */
+export const ERROR_STACK_THROTTLE_MS = 60_000;
+
+/**
+ * 500 로거. 같은 `code+message` 의 **스택 전체는 분당 한 번만** 찍고 나머지는 한 줄이다.
+ *
+ * 왜: 한 라우트가 망가지면 브라우저가 초당 수십 번 재시도하고, 스택 전체(수십 줄)가
+ * 그만큼 쌓여 터미널에서 다른 로그를 전부 밀어낸다 — 정작 첫 스택을 못 찾는다.
+ * 억제된 횟수는 다음 스택 줄에 `(suppressed N)` 로 남으므로 정보가 사라지지 않는다.
+ */
+export function createErrorLogger(now: () => number): (err: unknown) => void {
+  const lastAt = new Map<string, { at: number; suppressed: number }>();
+  return (err: unknown): void => {
+    const e = err instanceof Error ? err : new Error(String(err));
+    const code = (e as { code?: unknown }).code;
+    const key = `${typeof code === 'string' ? code : e.name}|${e.message}`;
+    const t = now();
+    const prev = lastAt.get(key);
+    if (prev !== undefined && t - prev.at < ERROR_STACK_THROTTLE_MS) {
+      prev.suppressed += 1;
+      console.error(`[ggto] unhandled error ${key} (스택 생략 — 최근 ${String(Math.round((t - prev.at) / 1000))}s 안에 찍었다)`);
+      return;
+    }
+    const suppressed = prev?.suppressed ?? 0;
+    lastAt.set(key, { at: t, suppressed: 0 });
+    console.error(`[ggto] unhandled error${suppressed > 0 ? ` (suppressed ${String(suppressed)})` : ''}`, e);
+  };
 }
 
 export function createApp(opts: AppOptions = {}): Hono {
@@ -38,9 +69,10 @@ export function createApp(opts: AppOptions = {}): Hono {
   const version = opts.version ?? serverVersion();
   const webDist = opts.webDist ?? null;
 
+  const logger = createErrorLogger(opts.now ?? ((): number => Date.now()));
   app.onError((err, c) => {
     const mapped = mapError(err);
-    if (mapped.log) console.error('[ggto] unhandled error', err);
+    if (mapped.log) logger(err);
     return c.json(mapped.body, mapped.status);
   });
 

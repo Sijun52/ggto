@@ -218,4 +218,45 @@ describe('P3 5.3 due_at 폭주 방어 (R2 / P3 R1 MAJOR 1)', () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  it('P4 12 (P3 R2 MINOR 3) 상한 전에 저장된 폭주 interval_days 를 열 때 보정한다', () => {
+    // 상한 없던 판이 남긴 값: Perfect 16회면 interval 이 1.2e8 일까지 자란다.
+    const RUNAWAY_DAYS = 120_000_000;
+    const dir = mkdtempSync(join(tmpdir(), 'ggto-srs-clamp-'));
+    try {
+      const path = join(dir, 'trainer.db');
+      const store = new TrainerStore(path);
+      const id = store.createSession({ createdAt: T0, seed: 1, count: 5, filter: '{}' });
+      store.setPending(id, KEY, T0);
+      store.recordAnswer(attempt({ sessionId: id }), applyReview(null, 'Perfect', T0), KEY);
+      store.close();
+
+      const raw = new DatabaseSync(path);
+      raw
+        .prepare('UPDATE srs_state SET interval_days = ?, due_at = ?, updated_at = ? WHERE spot_key = ?')
+        .run(RUNAWAY_DAYS, 10_444_497_534_716_632n, T0, KEY);
+      const before = raw.prepare('PRAGMA user_version').get() as { user_version: number };
+      raw.close();
+
+      const reopened = new TrainerStore(path);
+      const state = reopened.getSrs(KEY, T0);
+      expect(state?.intervalDays).toBe(MAX_INTERVAL_DAYS);
+      // due_at 도 읽을 수 있는 범위로 내려온다 (updated_at + 365일).
+      expect(state?.dueAt).toBe(T0 + MAX_INTERVAL_DAYS * DAY_MS);
+      reopened.close();
+      // 멱등: 다시 열어도 값이 더 변하지 않는다.
+      const again = new TrainerStore(path);
+      expect(again.getSrs(KEY, T0)?.intervalDays).toBe(MAX_INTERVAL_DAYS);
+      expect(again.getSrs(KEY, T0)?.dueAt).toBe(T0 + MAX_INTERVAL_DAYS * DAY_MS);
+      again.close();
+      // 스키마 변경이 아니다 — user_version 은 그대로여야 한다.
+      const check = new DatabaseSync(path);
+      expect((check.prepare('PRAGMA user_version').get() as { user_version: number }).user_version).toBe(
+        before.user_version,
+      );
+      check.close();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });

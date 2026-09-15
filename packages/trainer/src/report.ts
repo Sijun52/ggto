@@ -6,8 +6,10 @@
  * 연습할수록 실력이 좋아 보이는" 리포트가 된다.
  */
 
-import type { AttemptAgg } from './store.js';
-import { CATEGORIES, VERDICTS, type Agg, type Category, type CategoryAgg, type Leak, type SetAgg, type Verdict } from './types.js';
+import type { ChartRepository } from '@ggto/preflop';
+import { DAY_MS, LEECH_LAPSES } from './srs.js';
+import type { AttemptAgg, SessionRow, TrainerStore } from './store.js';
+import { CATEGORIES, VERDICTS, type Agg, type Category, type CategoryAgg, type Leak, type Report, type SetAgg, type Verdict } from './types.js';
 
 /** 리크로 보기 위한 최소 ev 채점 횟수 (P3.md 6). 표본이 적으면 평균이 흔들린다. */
 export const LEAK_MIN_ATTEMPTS = 20;
@@ -90,3 +92,44 @@ export function leaksOf(cats: readonly CategoryAgg[]): Leak[] {
 }
 
 
+
+// --- 조립 -------------------------------------------------------------------
+
+export interface BuildReportInput {
+  repo: ChartRepository;
+  store: TrainerStore;
+  now: number;
+  /** 세션 스코프면 그 행, 30일 스코프면 `null` */
+  session: SessionRow | null;
+  scope: { days: number } | { sessionId: number };
+}
+
+/**
+ * 한 리포트를 만든다 (P3.md 6절). 두 스코프의 차이는 **행 집합과 scope 필드뿐**이고
+ * 집계 파이프라인(aggregate → byCategory → bySet → leaksOf)은 같다 —
+ * `service.ts` 에 두 벌로 적혀 있던 것을 여기로 옮겼다 (P3 R1 MINOR 3).
+ */
+export function buildReport(input: BuildReportInput): Report {
+  const { repo, store, now, session, scope } = input;
+  const names = new Map(repo.listSets().map((s) => [s.contentHash, s.name]));
+  const nameOf = (hash: string): string | null => names.get(hash) ?? null;
+
+  const rows =
+    session === null || !('sessionId' in scope)
+      ? store.attemptsSince(now - ('days' in scope ? scope.days : 0) * DAY_MS)
+      : store.attemptsOfSession(scope.sessionId);
+  const cats = byCategory(rows);
+  const reportScope: Report['scope'] =
+    session === null || !('sessionId' in scope)
+      ? { days: 'days' in scope ? scope.days : 0 }
+      : { sessionId: scope.sessionId, durationMs: Math.max(0, (session.finishedAt ?? now) - session.createdAt) };
+
+  return {
+    scope: reportScope,
+    totals: aggregate(rows),
+    byCategory: cats,
+    bySet: bySet(rows, nameOf),
+    leaks: leaksOf(cats),
+    srs: store.srsCounts(now, LEECH_LAPSES),
+  };
+}

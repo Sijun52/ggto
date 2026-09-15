@@ -6,7 +6,7 @@
  * 넓혀(375 → 562) 페이지 전체를 0.67배로 축소한다 (P3M 1절 실측).
  */
 
-import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 
 /** 축 라벨 열의 폭 (RangeGrid 와 같은 값) */
 export const AXIS_WIDTH = 18;
@@ -40,26 +40,50 @@ export function gridMaxFor(viewportWidth: number): number {
  * `useLayoutEffect` 로 **첫 페인트 전에** 한 번 잰다: 페인트 후에 줄이면 모바일 브라우저가
  * 이미 layout viewport 를 넓힌 뒤라 축소가 남는다.
  */
-export function useContainerWidth<T extends HTMLElement>(): [RefObject<T | null>, number | null] {
+export function useContainerWidth<T extends HTMLElement>(
+  /**
+   * 레이아웃 **모드**가 바뀌는 값들 (예: reach 패널이 옆 열로 붙는가). 이 값이 바뀌는
+   * 커밋에서 `ResizeObserver` 를 기다리지 않고 **같은 커밋 안에서** 다시 잰다.
+   */
+  modeDeps: readonly unknown[] = [],
+): [RefObject<T | null>, number | null] {
   const ref = useRef<T | null>(null);
   const [width, setWidth] = useState<number | null>(null);
 
-  useLayoutEffect(() => {
+  const measure = useCallback((): void => {
     const el = ref.current;
     if (el === null) return;
-    const measure = (): void => {
-      const w = el.getBoundingClientRect().width;
-      // jsdom 은 항상 0 을 준다. 0 을 폭으로 믿으면 최소 격자로 떨어지므로 null 로 남긴다.
-      setWidth(w > 0 ? w : null);
-    };
+    const w = el.getBoundingClientRect().width;
+    // jsdom 은 항상 0 을 준다. 0 을 폭으로 믿으면 최소 격자로 떨어지므로 null 로 남긴다.
+    setWidth(w > 0 ? w : null);
+  }, []);
+
+  useLayoutEffect(() => {
+    if (typeof ResizeObserver !== 'function') {
+      measure();
+      return;
+    }
+    const el = ref.current;
+    if (el === null) return;
     measure();
-    if (typeof ResizeObserver !== 'function') return;
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => {
       ro.disconnect();
     };
-  }, []);
+  }, [measure]);
+
+  /**
+   * **왜 RO 만으로는 부족한가 (P3M R2 MINOR 4)**: 컨테이너가 720 → 376 으로 줄어드는 커밋에서
+   * RO 는 그 커밋의 레이아웃 **뒤에** 발화하므로 그 사이에 페인트가 한 번 낄 수 있다. 그 프레임은
+   * 캔버스가 아직 416 이고 컨테이너는 376 이라 격자가 옆 열의 reach 패널을 24px 덮는다.
+   * layout effect 안의 `setState` 는 React 가 **같은 커밋 안에서 동기 재렌더**하므로
+   * (P3M R2 리뷰 2절) 여기서 재측정하면 그 프레임 자체가 생기지 않는다.
+   */
+  useLayoutEffect(() => {
+    measure();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 모드 전환 시점에만 재측정한다
+  }, [measure, ...modeDeps]);
 
   return [ref, width];
 }

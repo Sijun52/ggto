@@ -9,10 +9,11 @@
 import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { Cdp, emulate, evaluate, goto, launchChrome, screenshot, waitFor } from './lib/cdp.mjs';
-import { ensureServer, firstChartSetId, REPO_ROOT } from './lib/server.mjs';
+import { ensureServer, firstChartSetId } from './lib/server.mjs';
+import { outDir } from './lib/out.mjs';
 import * as P from './lib/probes.mjs';
 
-const OUT_DIR = resolve(REPO_ROOT, 'docs/reviews/assets');
+const OUT_DIR = outDir(process.argv.slice(2));
 const W = 375;
 const H = 812;
 
@@ -230,6 +231,66 @@ async function main() {
         canvas,
       );
     }
+    // 8b. 태블릿 reach 토글 (P3M R2 MINOR 4). 768~829px 는 좌측 열이 가장 좁은 구간이라
+    // 격자가 우측 reach 패널을 덮기 쉽다. 정상 상태뿐 아니라 **전환 과도기**도 본다:
+    // rAF 로 매 프레임 재면서 `canvas.right > panel.left` 인 프레임이 2개를 넘으면 실패다.
+    for (const tw of [768, 800, 829]) {
+      await emulate(cdp, { width: tw, height: 1024, dpr: 2, mobile: true });
+      await goto(cdp, `${server.baseUrl}/charts?set=${String(setId)}`);
+      await waitFor(cdp, `document.querySelector('canvas[role="grid"]')`, { label: `tablet-${String(tw)} 격자` });
+      const rec = await evaluate(
+        cdp,
+        `(() => {
+          window.__reachFrames = [];
+          window.__reachDone = false;
+          const t0 = performance.now();
+          const tick = () => {
+            const c = document.querySelector('canvas[role="grid"]');
+            const p = document.querySelector('[data-testid="reach-panel"]');
+            if (c !== null && p !== null) {
+              const cr = c.getBoundingClientRect();
+              const pr = p.getBoundingClientRect();
+              window.__reachFrames.push({ t: Math.round(performance.now() - t0), overlap: Math.round(cr.right - pr.left) });
+            }
+            if (performance.now() - t0 < 2000) requestAnimationFrame(tick);
+            else window.__reachDone = true;
+          };
+          requestAnimationFrame(tick);
+          document.querySelector('[data-testid="mode-reach"]').click();
+          return true;
+        })()`,
+      );
+      void rec;
+      await waitFor(cdp, `window.__reachDone === true`, { label: `tablet-${String(tw)} reach 녹화`, timeout: 8000 });
+      const frames = await evaluate(cdp, 'window.__reachFrames');
+      const bad = frames.filter((f) => f.overlap > 0);
+      check(frames.length > 30, `tablet-${String(tw)}-reach: 프레임을 실제로 녹화했다`, { frames: frames.length });
+      check(
+        bad.length <= 2,
+        `tablet-${String(tw)}-reach: 전환 과도기 겹침 <= 2 프레임 (P3M R2 MINOR 4)`,
+        { badFrames: bad.length, firstBad: bad[0], lastBad: bad.at(-1) },
+      );
+      // 프레임 수와 별개로 **언제** 끝났는지도 본다: 리뷰가 관측한 증상은 "1193/1203/1213ms
+      // 까지 416 유지" 였다. 느린 머신에서 프레임 수가 적게 잡혀도 이 단언은 걸린다.
+      check(
+        (bad.at(-1)?.t ?? 0) <= 100,
+        `tablet-${String(tw)}-reach: 겹침이 100ms 안에 끝난다`,
+        { lastBadAtMs: bad.at(-1)?.t ?? null },
+      );
+      const settledCanvas = await evaluate(cdp, P.CANVAS);
+      const settledPanel = await evaluate(cdp, P.rectOf('reach-panel'));
+      check(
+        settledPanel !== null && settledCanvas !== null && settledPanel.left > settledCanvas.right,
+        `tablet-${String(tw)}-reach: 정상 상태에서 패널이 격자 오른쪽이다`,
+        { panelLeft: settledPanel?.left, canvasRight: settledCanvas?.right },
+      );
+      check(
+        (await evaluate(cdp, P.OVERFLOWING)).length === 0,
+        `tablet-${String(tw)}-reach: 뷰포트를 넘는 요소 0`,
+      );
+    }
+    await emulate(cdp, { width: 768, height: 1024, dpr: 2, mobile: true });
+
     await startSession(cdp, server.baseUrl, 20);
     check(
       (await evaluate(cdp, P.SMALL_TARGETS)).length === 0,

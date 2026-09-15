@@ -10,7 +10,7 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -25,14 +25,43 @@ const HASH = 'a'.repeat(64);
 const KEY_MID = `pf:${HASH}::AsKh`;
 const KEY_AFTER = `pf:${HASH}::AsQh`;
 
-function runChild(dbPath: string, sessionId: number, key: string, now: number, mode: 'mid' | 'after'): number {
-  const r = spawnSync(process.execPath, [RUNNER, dbPath, String(sessionId), key, String(now), mode], {
-    encoding: 'utf8',
-  });
+interface KillTrace {
+  mode: string;
+  attemptBound: boolean;
+  srsBound: boolean;
+}
+
+/**
+ * 자식을 돌리고 **덫이 실제로 발동했음**을 증명한다 (P3 R2 MINOR 1).
+ *
+ * Windows 의 SIGKILL 은 `status 1 · signal null` 인데 러너가 그냥 예외로 죽어도 `status 1` 이라
+ * 종료 코드만으로는 둘이 같아 보인다. 러너가 고유 코드(3 덫 미발동 · 4 예외 · 5 낡은 dist · 0 kill 없음)
+ * 를 쓰고 kill 직전에 마커 파일을 남기므로, 여기서 세 가지를 같이 단언한다:
+ * 코드가 그 넷 중 하나가 아닐 것 · stderr 에 오류가 없을 것 · 마커가 순서를 증명할 것.
+ */
+function runChild(
+  dbPath: string,
+  sessionId: number,
+  key: string,
+  now: number,
+  mode: 'mid' | 'after',
+  markerPath: string,
+): number {
+  const r = spawnSync(
+    process.execPath,
+    [RUNNER, dbPath, String(sessionId), key, String(now), mode, markerPath],
+    { encoding: 'utf8' },
+  );
   if (r.error !== undefined && r.error !== null) throw r.error;
-  // exit 3 = 덫이 안 걸렸다 (kill 이 일어나지 않았다) → 이 테스트는 아무것도 증명하지 못한다.
-  expect(r.status).not.toBe(3);
-  expect(r.status).not.toBe(0);
+  const stderr = r.stderr ?? '';
+  // 0 = kill 없음 · 3 = 덫 미발동 · 4 = 예외로 죽음 · 5 = 낡은/없는 dist. 전부 "증명 실패" 다.
+  expect([0, 3, 4, 5]).not.toContain(r.status);
+  expect(stderr).not.toMatch(/uncaught|낡은 dist|Error|markerPath/);
+  const trace = JSON.parse(readFileSync(markerPath, 'utf8')) as KillTrace;
+  expect(trace.mode).toBe(mode);
+  // attempt 바인딩이 먼저다 — INSERT 가 이미 실행된 지점에서 죽었다는 증거.
+  expect(trace.attemptBound).toBe(true);
+  expect(trace.srsBound).toBe(mode === 'mid');
   return r.status ?? -1;
 }
 
@@ -73,7 +102,7 @@ describe('P3 13 답 처리 중 프로세스 kill', () => {
       store.setPending(id, KEY_MID, T0);
       store.close(); // 자식이 쓸 수 있도록 닫는다 (파일 하나를 두 프로세스가 잡지 않는다).
 
-      runChild(path, id, KEY_MID, T0, 'mid');
+      runChild(path, id, KEY_MID, T0, 'mid', join(dir, 'marker.json'));
 
       // 살아남은 것이 있으면 안 된다 — 셋 중 하나라도 남으면 반쪽 상태다.
       expect(counts(path, KEY_MID)).toEqual({ attempts: 0, srs: 0 });
@@ -108,7 +137,7 @@ describe('P3 13 답 처리 중 프로세스 kill', () => {
       store.setPending(id, KEY_AFTER, T0);
       store.close();
 
-      runChild(path, id, KEY_AFTER, T0, 'after');
+      runChild(path, id, KEY_AFTER, T0, 'after', join(dir, 'marker.json'));
 
       expect(counts(path, KEY_AFTER)).toEqual({ attempts: 1, srs: 1 });
       const after = new TrainerStore(path);

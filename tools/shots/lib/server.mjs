@@ -1,8 +1,13 @@
 /**
- * 검사용 서버 확보. 이미 떠 있으면 그것을 쓰고, 아니면 직접 띄운다.
+ * 검사용 서버 확보. **항상 직접 띄운다** (기본 포트 7791).
  *
- * `GGTO_BASE_URL` 로 다른 주소를 지정할 수 있다. 직접 띄울 때는 레포의 `data/` 를 그대로
- * 쓴다 — 차트가 없으면 격자를 검사할 수 없으므로 `npm run seed` 가 선행 조건이다.
+ * 이미 떠 있는 서버를 줍지 않는 이유 (P3M R1 MINOR 4): 옛날에 띄워 둔 7777 프로세스가
+ * 남아 있으면 `check:*` 가 **낡은 dist** 를 검사하고 초록불을 준다 — 리뷰 라운드마다
+ * 실제로 그런 잔여 프로세스가 있었다. 기존 서버를 쓰고 싶으면 `GGTO_BASE_URL` 로
+ * **명시**해야 한다.
+ *
+ * 직접 띄울 때는 레포의 `data/` 를 그대로 쓴다 — 차트가 없으면 격자를 검사할 수 없으므로
+ * `npm run seed` 가 선행 조건이다.
  */
 
 import { spawn } from 'node:child_process';
@@ -27,9 +32,6 @@ export async function ensureServer() {
     if (!(await health(fromEnv))) throw new Error(`GGTO_BASE_URL 이 응답하지 않는다: ${fromEnv}`);
     return { baseUrl: fromEnv, stop: () => undefined };
   }
-
-  const existing = 'http://127.0.0.1:7777';
-  if (await health(existing)) return { baseUrl: existing, stop: () => undefined };
 
   const entry = resolve(REPO_ROOT, 'packages/server/dist/main.js');
   const webDist = resolve(REPO_ROOT, 'web/dist');

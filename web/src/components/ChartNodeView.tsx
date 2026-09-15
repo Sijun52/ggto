@@ -84,11 +84,19 @@ export function ChartNodeView(props: ChartNodeViewProps): React.JSX.Element {
   const { node, masked, viewMode, colors, reachWeights, reachPos, positionReach } = props;
   const panel: PanelPlacement = props.panel ?? 'below-collapsed';
 
-  const [gridRef, containerWidth] = useContainerWidth<HTMLDivElement>();
   const isXl = useMediaQuery('(min-width: 1280px)', true);
   const isMd = useMediaQuery('(min-width: 768px)', true);
   const hoverCapable = useHoverCapable();
   const [panelOpen, setPanelOpen] = useState(false);
+
+  // reach 패널은 D20(콤보 패널 접힘+아래) 의 대상이 **아니다**: 아래로 내리면 1280x720
+  // 에서 top 813 으로 화면 밖이고 격자 오른쪽 700px 이 빈다 (P3M R1 MAJOR 2).
+  // `< md` 에서만 격자 아래, `>= md` 에서는 격자 오른쪽 열 (P3M 6.2).
+  const reachAside = (props.panel ?? 'below-collapsed') !== 'none' && viewMode === 'reach';
+
+  // 이 둘이 바뀌면 왼쪽 열의 폭이 그 커밋에서 바뀐다 — RO 를 기다리지 않고 같이 잰다
+  // (P3M R2 MINOR 4: 토글 직후 한 프레임 동안 격자가 패널을 24px 덮었다).
+  const [gridRef, containerWidth] = useContainerWidth<HTMLDivElement>([reachAside, isMd, isXl]);
 
   const size =
     props.size ??
@@ -127,11 +135,6 @@ export function ChartNodeView(props: ChartNodeViewProps): React.JSX.Element {
 
   const selected = masked ? props.highlightClass : props.selectedClass;
   const selectedCombos = props.selectedClass === null ? 0 : handClassCombos(props.selectedClass).length;
-
-  // reach 패널은 D20(콤보 패널 접힘+아래) 의 대상이 **아니다**: 아래로 내리면 1280x720
-  // 에서 top 813 으로 화면 밖이고 격자 오른쪽 700px 이 빈다 (P3M R1 MAJOR 2).
-  // `< md` 에서만 격자 아래, `>= md` 에서는 격자 오른쪽 열 (P3M 6.2).
-  const reachAside = panel !== 'none' && viewMode === 'reach';
 
   return (
     <div className={`flex min-w-0 flex-col gap-3 ${reachAside ? 'md:flex-row md:items-start md:gap-6' : ''}`}>

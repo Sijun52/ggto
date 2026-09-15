@@ -3,7 +3,7 @@
  * `WebSocket`/`fetch` 만 쓴다 (P3M 2절). puppeteer 를 넣지 않는 이유는 그것 하나가
  * 200MB 짜리 Chromium 을 또 받기 때문이다 — 이 PC 에는 이미 Chrome 이 있다.
  *
- * Chrome 경로: `GGTO_CHROME` 환경변수 → Windows 표준 경로 → PATH 의 `chrome`.
+ * Chrome 경로: `GGTO_CHROME` 환경변수 → 플랫폼별 표준 경로 (Windows/macOS/Linux).
  */
 
 import { spawn } from 'node:child_process';
@@ -11,21 +11,40 @@ import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-const WINDOWS_CANDIDATES = [
-  'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-  'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
-  'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
-];
+const CANDIDATES = {
+  win32: [
+    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+    'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
+  ],
+  darwin: [
+    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    '/Applications/Chromium.app/Contents/MacOS/Chromium',
+    '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
+  ],
+  linux: [
+    '/usr/bin/google-chrome',
+    '/usr/bin/google-chrome-stable',
+    '/usr/bin/chromium',
+    '/usr/bin/chromium-browser',
+    '/snap/bin/chromium',
+  ],
+};
 
+/**
+ * 이 레포는 Windows 개발 PC 에서 돌지만 스크립트가 플랫폼을 가정하면 안 된다
+ * (P3M R1 MINOR 4). 후보에 없으면 `GGTO_CHROME` 로 지정한다.
+ */
 export function findChrome() {
   const fromEnv = process.env.GGTO_CHROME;
   if (fromEnv !== undefined && fromEnv.length > 0) {
     if (!existsSync(fromEnv)) throw new Error(`GGTO_CHROME not found: ${fromEnv}`);
     return fromEnv;
   }
-  for (const p of WINDOWS_CANDIDATES) if (existsSync(p)) return p;
+  const list = CANDIDATES[process.platform] ?? CANDIDATES.linux;
+  for (const p of list) if (existsSync(p)) return p;
   throw new Error(
-    'Chrome 을 찾지 못했다. GGTO_CHROME 에 chrome.exe 경로를 주라 (P3M 2절).',
+    `Chrome 을 찾지 못했다 (${process.platform}). GGTO_CHROME 에 실행 파일 경로를 주라 (P3M 2절).\n후보: ${list.join(', ')}`,
   );
 }
 

@@ -79,3 +79,17 @@ export function parseSpotKey(key: string): ParsedSpotKey {
   }
   return { contentHash: hash, seq, combo: parseCombo(combo) };
 }
+
+/**
+ * 던지지 않는 `parseSpotKey`. 저장된 키가 이 빌드의 문법으로 안 읽히면 그 스팟은 큐에서
+ * 빠질 뿐이고 기록은 남는다 (P3.md 13). `service.ts` 에서 옮겼다 (P3 R1 MINOR 3).
+ */
+export function parseSpotKeySafe(key: string): { contentHash: string; seq: string; combo: ComboIndex } | null {
+  try {
+    return parseSpotKey(key);
+  } catch (e) {
+    // 저장된 키가 이 빌드의 문법으로 안 읽히면 그 스팟은 큐에서 빠질 뿐이다 (기록은 남는다).
+    if (e instanceof SpotKeyError) return null;
+    throw e;
+  }
+}

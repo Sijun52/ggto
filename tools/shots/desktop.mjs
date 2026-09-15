@@ -9,10 +9,11 @@
 import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { Cdp, emulate, evaluate, goto, launchChrome, screenshot, waitFor } from './lib/cdp.mjs';
-import { ensureServer, firstChartSetId, REPO_ROOT } from './lib/server.mjs';
+import { ensureServer, firstChartSetId } from './lib/server.mjs';
+import { outDir } from './lib/out.mjs';
 import * as P from './lib/probes.mjs';
 
-const OUT_DIR = resolve(REPO_ROOT, 'docs/reviews/assets');
+const OUT_DIR = outDir(process.argv.slice(2));
 const SIZES = [
   { w: 1280, h: 720 },
   { w: 1500, h: 1000 },

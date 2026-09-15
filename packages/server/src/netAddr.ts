@@ -73,7 +73,9 @@ export function classifyIpv6(addr: string): AddrKind {
   if (bare === '::1') return 'loopback';
   const head = bare.split(':')[0] ?? '';
   if (head === '') return 'unknown'; // `::ffff:…` 등 — 판정하지 않는다
-  const n = Number.parseInt(head.padEnd(4, '0'), 16);
+  // IPv6 그룹은 16비트 hex 이고 압축 표기는 **앞** 0 을 생략한다 (`fc::1` = `00fc::1`).
+  // `padEnd` 로 채우면 `fc` 가 `fc00` 이 되어 `::/8` 예약 주소가 ULA(private) 로 샌다 (P3M R2 MINOR 1).
+  const n = Number.parseInt(head.padStart(4, '0'), 16);
   if (!Number.isFinite(n)) return 'unknown';
   // fe80::/10 — 상위 10비트가 1111111010
   if ((n & 0xffc0) === 0xfe80) return 'link-local';
@@ -105,11 +107,22 @@ export function classifyInterfaces(addrs: readonly InterfaceAddr[]): ClassifiedA
   return addrs.map((a) => ({ ...a, kind: a.family === 'IPv4' ? classifyIpv4(a.address) : classifyIpv6(a.address) }));
 }
 
-/** 휴대폰에 안내할 주소들. 공인·링크로컬·루프백은 뺀다. IPv4 를 IPv6 보다 앞에 둔다. */
+/**
+ * 휴대폰에 안내할 주소들. 공인·링크로컬·루프백은 뺀다.
+ *
+ * 정렬 키는 `(kind: private < overlay, family: IPv4 < IPv6)` 다. family 만 보면 Tailscale 어댑터가
+ * `os.networkInterfaces()` 에서 이더넷보다 먼저 열거되는 PC 에서 `start:lan` 이 `100.x` 에 바인드하고
+ * 그 주소를 "휴대폰에서:" 로 찍는다 — 같은 Wi‑Fi 의 휴대폰은 그 주소에 닿지 못한다 (P3M R2 MINOR 2).
+ * 스펙 7절-2 는 "첫 **사설** 주소" 이므로 `private` 가 `overlay` 보다 앞이어야 한다.
+ */
+function lanRank(a: ClassifiedAddr): number {
+  return (a.kind === 'private' ? 0 : 2) + (a.family === 'IPv4' ? 0 : 1);
+}
+
 export function lanCandidates(addrs: readonly InterfaceAddr[]): ClassifiedAddr[] {
   return classifyInterfaces(addrs)
     .filter((a) => !a.internal && isReachableLan(a.kind))
-    .sort((x, y) => (x.family === y.family ? 0 : x.family === 'IPv4' ? -1 : 1));
+    .sort((x, y) => lanRank(x) - lanRank(y));
 }
 
 /** 인터페이스에 붙어 있는 공인 주소들 (와일드카드 바인드가 노출하는 것) */
@@ -139,6 +152,15 @@ export interface BindInput {
 export function decideBind(input: BindInput): BindDecision {
   const kind = classifyHost(input.host);
   const exposed = publicAddrs(input.addrs).map((a) => `${a.address} (${a.family})`);
+  // 와일드카드가 **실제로 여는** 공인 주소만 거부 사유가 된다: `0.0.0.0` 은 IPv4 소켓 하나라
+  // 공인 IPv6 를 열지 않는다. ISP 가 글로벌 IPv6 를 주는 흔한 가정집에서 `0.0.0.0` 이
+  // `2001:db8::…` 를 이유로 거부되던 것을 고친다 (P3M R2 MINOR 3). `::` 는 (듀얼스택 소켓이라)
+  // 둘 다 센다.
+  const wildcardFamily: 'IPv4' | 'IPv6' | 'both' =
+    input.host === '0.0.0.0' ? 'IPv4' : 'both';
+  const exposedByWildcard = publicAddrs(input.addrs)
+    .filter((a) => wildcardFamily === 'both' || a.family === wildcardFamily)
+    .map((a) => `${a.address} (${a.family})`);
 
   if (input.allowPublic) return { ok: true, host: input.host, kind, exposedPublic: exposed };
 
@@ -160,13 +182,13 @@ export function decideBind(input: BindInput): BindDecision {
       detail: [`IP 리터럴이 아니다 (localhost 는 예외)`],
     };
   }
-  if (kind === 'unspecified' && exposed.length > 0) {
+  if (kind === 'unspecified' && exposedByWildcard.length > 0) {
     return {
       ok: false,
       host: input.host,
       kind,
       reason: `GGTO_HOST=${input.host} 는 모든 인터페이스에 바인드하는데 이 PC 에 공인 IP 가 있다`,
-      detail: exposed,
+      detail: exposedByWildcard,
     };
   }
   return { ok: true, host: input.host, kind, exposedPublic: exposed };

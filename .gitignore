@@ -6,3 +6,6 @@ dist/
 # 크래시 아티팩트 / 로컬 전용 설정
 bash.exe.stackdump
 .claude/settings.local.json
+
+# check:mobile / check:desktop 기본 출력 (--publish 없이는 여기로)
+/tools/shots/out/

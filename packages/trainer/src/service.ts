@@ -12,9 +12,11 @@ import { grade } from './grade.js';
 import type { Grade } from './types.js';
 import { buildPool, collectPool, findNode, setHashes, spotKeyOf, type Pool, type PoolNode } from './pool.js';
 import { drawSpotKey } from './draw.js';
-import { aggregate, byCategory, bySet, leaksOf } from './report.js';
-import { formatCombo, parseSpotKey } from './spotKey.js';
-import { applyReview, DAY_MS, LEECH_LAPSES } from './srs.js';
+import { drawSeed } from './drawSeed.js';
+import { parseFilter } from './filter.js';
+import { buildReport } from './report.js';
+import { formatCombo, parseSpotKey, parseSpotKeySafe } from './spotKey.js';
+import { applyReview } from './srs.js';
 import { TrainerStore, type SessionRow } from './store.js';
 import {
   MissingChartError,
@@ -22,7 +24,6 @@ import {
   SpotKeyError,
   SpotMismatchError,
   TrainerInputError,
-  isCategory,
   type Category,
   type Report,
   type SessionFilter,
@@ -81,29 +82,6 @@ export interface OpenTrainerOptions {
   /** `data/trainer.db` 또는 ':memory:' */
   dbPath: string;
   now?: () => number;
-}
-
-/**
- * splitmix32 의 finalizer 한 스텝. 비선형(곱셈 + xorshift)이라 입력의 1비트 차이가
- * 출력 전체로 번진다.
- */
-function mix32(x: number): number {
-  let t = x | 0;
-  t = Math.imul(t ^ (t >>> 16), 0x21f0aaad);
-  t = Math.imul(t ^ (t >>> 15), 0x735a2d97);
-  return (t ^ (t >>> 15)) >>> 0;
-}
-
-/**
- * 세션 seed 와 문항 번호를 섞어 draw 별 rng 시드를 만든다 (P3.md 5.3 R2).
- *
- * **seed 를 먼저 비선형으로 섞은 뒤** index 를 더하고 다시 섞는다. R1 의 `(seed ^ C) ^ index`
- * 는 XOR 선형이라 `drawSeed(s, i) = drawSeed(s ^ i, 0)` 이 성립했고, 그래서 인접 시드 세션이
- * 같은 스팟 집합을 뽑았다 (시드 5000/5001 의 50문항 집합 교집합 46). 덧셈은 XOR 과 다른
- * 군이라 이 항등식이 깨진다 (P3 R1 MAJOR 2).
- */
-function drawSeed(seed: number, index: number): number {
-  return mix32((mix32(seed) + Math.imul(index + 1, 0x9e3779b9)) | 0);
 }
 
 export class TrainerService {
@@ -252,33 +230,13 @@ export class TrainerService {
   }
 
   report(scope: { days: number } | { sessionId: number }): Report {
-    const now = this.#now();
-    const names = new Map(this.#repo.listSets().map((s) => [s.contentHash, s.name]));
-    const nameOf = (hash: string): string | null => names.get(hash) ?? null;
-
-    if ('sessionId' in scope) {
-      const s = this.#requireSession(scope.sessionId);
-      const rows = this.#store.attemptsOfSession(scope.sessionId);
-      const cats = byCategory(rows);
-      return {
-        scope: { sessionId: scope.sessionId, durationMs: Math.max(0, (s.finishedAt ?? now) - s.createdAt) },
-        totals: aggregate(rows),
-        byCategory: cats,
-        bySet: bySet(rows, nameOf),
-        leaks: leaksOf(cats),
-        srs: this.#store.srsCounts(now, LEECH_LAPSES),
-      };
-    }
-    const rows = this.#store.attemptsSince(now - scope.days * DAY_MS);
-    const cats = byCategory(rows);
-    return {
-      scope: { days: scope.days },
-      totals: aggregate(rows),
-      byCategory: cats,
-      bySet: bySet(rows, nameOf),
-      leaks: leaksOf(cats),
-      srs: this.#store.srsCounts(now, LEECH_LAPSES),
-    };
+    return buildReport({
+      repo: this.#repo,
+      store: this.#store,
+      now: this.#now(),
+      session: 'sessionId' in scope ? this.#requireSession(scope.sessionId) : null,
+      scope,
+    });
   }
 
   close(): void {
@@ -331,24 +289,6 @@ export class TrainerService {
       resolution: node.resolution,
     };
   }
-}
-
-function parseSpotKeySafe(key: string): { contentHash: string; seq: string; combo: ComboIndex } | null {
-  try {
-    return parseSpotKey(key);
-  } catch (e) {
-    // 저장된 키가 이 빌드의 문법으로 안 읽히면 그 스팟은 큐에서 빠질 뿐이다 (기록은 남는다).
-    if (e instanceof SpotKeyError) return null;
-    throw e;
-  }
-}
-
-function parseFilter(json: string): SessionFilter {
-  const raw = JSON.parse(json) as { contentHashes?: unknown; categories?: unknown };
-  const out: SessionFilter = {};
-  if (Array.isArray(raw.contentHashes)) out.contentHashes = raw.contentHashes.filter((h): h is string => typeof h === 'string');
-  if (Array.isArray(raw.categories)) out.categories = raw.categories.filter(isCategory);
-  return out;
 }
 
 export function openTrainer(opts: OpenTrainerOptions): TrainerService {
