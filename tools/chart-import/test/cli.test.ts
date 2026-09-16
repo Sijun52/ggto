@@ -7,7 +7,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { openRepository, type GgtoJson } from '@ggto/preflop';
+import { contentHash, openRepository, type GgtoJson } from '@ggto/preflop';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { miniDoc } from './fixture.js';
 
@@ -171,5 +171,78 @@ describe('6.1 CLI', () => {
     expect((ok.json[0]?.['warnings'] as unknown[]).length).toBe(1);
     const strict = run(['--dry-run', '--strict', file]);
     expect(strict.status).toBe(1);
+  });
+});
+
+describe('7.1 --aliases (은퇴)', () => {
+  const alias = (from: string, to: string): unknown => ({
+    format: 'ggto-aliases',
+    version: 1,
+    aliases: [{ from, to, reason: 'P7: same model and stack, regenerated as mtt 2-max' }],
+  });
+
+  it('7.1 to 와 from 이 둘 다 DB 에 있으면 from 셋이 은퇴한다 (RETIRED 한 줄)', () => {
+    const oldFile = write('retire-old.json', miniDoc('retire old'));
+    const newFile = write('retire-new.json', miniDoc('retire new'));
+    const db = join(dir, 'retire.db');
+    const first = run(['--db', db, oldFile]);
+    expect(first.status).toBe(0);
+    const oldHash = contentHash(miniDoc('retire old'));
+    const newHash = contentHash(miniDoc('retire new'));
+    const aliasPath = write('aliases.json', alias(oldHash, newHash));
+
+    const r = run(['--db', db, '--aliases', aliasPath, newFile]);
+    expect(r.status).toBe(0);
+    expect(r.lines).toContain(`RETIRED ${oldHash.slice(0, 8)} -> ${newHash.slice(0, 8)}`);
+    const repo = openRepository(db);
+    try {
+      expect(repo.listSets().map((s) => s.name)).toEqual(['retire new']);
+    } finally {
+      repo.close();
+    }
+    // 두 번째 실행: 새 파일은 skipped, 은퇴할 것이 없으므로 RETIRED 줄도 없다
+    const again = run(['--db', db, '--aliases', aliasPath, newFile]);
+    expect(again.status).toBe(0);
+    expect(again.json[0]?.['skipped']).toBe(true);
+    expect(again.lines.some((l) => l.startsWith('RETIRED'))).toBe(false);
+  });
+
+  it('7.1 새 차트가 아직 없으면 옛 차트를 지우지 않는다 (사용자가 차트를 잃지 않는다)', () => {
+    const oldFile = write('keep-old.json', miniDoc('keep old'));
+    const db = join(dir, 'keep.db');
+    run(['--db', db, oldFile]);
+    const aliasPath = write('aliases-missing.json', alias(contentHash(miniDoc('keep old')), contentHash(miniDoc('never imported'))));
+    const r = run(['--db', db, '--aliases', aliasPath, oldFile]);
+    expect(r.status).toBe(0);
+    expect(r.lines.some((l) => l.startsWith('RETIRED'))).toBe(false);
+    const repo = openRepository(db);
+    try {
+      expect(repo.listSets().map((s) => s.name)).toEqual(['keep old']);
+    } finally {
+      repo.close();
+    }
+  });
+
+  it('7.1 디렉터리 임포트는 aliases.json 을 차트로 읽지 않는다', () => {
+    const sub = mkdtempSync(join(tmpdir(), 'ggto-alias-dir-'));
+    try {
+      writeFileSync(join(sub, 'a.json'), JSON.stringify(miniDoc('alias dir a')), 'utf8');
+      writeFileSync(join(sub, 'aliases.json'), JSON.stringify(alias('a'.repeat(64), 'b'.repeat(64))), 'utf8');
+      const r = run(['--db', join(dir, 'alias-dir.db'), sub]);
+      expect(r.status).toBe(0);
+      expect(r.json).toHaveLength(1);
+    } finally {
+      rmSync(sub, { recursive: true, force: true });
+    }
+  });
+
+  it('7.1 별칭 파일이 망가졌으면 exit 2 (반쯤 읽고 은퇴시키지 않는다)', () => {
+    const db = join(dir, 'bad-alias.db');
+    const file = write('alias-ok.json', miniDoc('alias ok'));
+    const badPath = join(dir, 'aliases-bad.json');
+    writeFileSync(badPath, JSON.stringify({ format: 'ggto-aliases', version: 1, aliases: [{ from: 'short', to: 'b'.repeat(64), reason: 'x' }] }), 'utf8');
+    const r = run(['--db', db, '--aliases', badPath, file]);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toMatch(/64 lowercase hex/);
   });
 });

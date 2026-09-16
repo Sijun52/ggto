@@ -28,7 +28,8 @@
 
 ```bash
 npm install        # prepare 훅이 core/protocol 을 먼저 빌드한다 (Node 24 필요)
-npm run seed       # 시드 차트 6개 생성 → data/ggto.db 임포트 (최초 1회, ~6초)
+npm run seed       # 2-max 푸시/폴드 45 차트 생성 → data/ggto.db 임포트 (최초 1회, 1분 안)
+# npm run gen:charts  # 전체 사다리 2~9-max x 앤티 3종 x 스택 15단 = 360 차트 (수 시간, --resume)
 npm run build
 npm start          # http://localhost:7777
 ```
@@ -150,16 +151,21 @@ Get-NetConnectionProfile | Select-Object InterfaceAlias, NetworkCategory
 
 공개된 프리플랍 차트 데이터셋 중 쓸 수 있는 것이 사실상 없다. 오픈소스 **솔버**는 있지만 (TexasSolver, wasm-postflop, HeadsUpSolver), **차트 데이터**는 출처·스택·레이크·사이즈가 기록돼 있지 않다. 파라미터를 모르는 차트는 어느 조건의 정답인지 알 수 없어서, 그걸로 트레이닝하면 틀린 걸 외우게 된다.
 
-그래서 `tools/chart-gen` 이 직접 푼다. HU 푸시/폴드 6개 스택, CFR+ 로 수렴시키고 **exploitability 를 실제로 계산해 게이트로 건다.**
+그래서 `tools/chart-gen` 이 직접 푼다. **MTT 푸시/폴드 2~9-max × 앤티 3종(없음 / BB 앤티 1bb /
+전원 0.125bb) × 스택 3~20bb 15단**, CFR+ 로 수렴시키고 **정확도를 실제로 계산해 게이트로 건다.**
 
 | 검증 | 결과 |
 |---|---|
-| exploitability (NashConv/2) | 2.7e-8 ~ 1.4e-7 bb (게이트 0.005bb) |
+| ε-균형 `epsilonBb = max_i gain_i` | 게이트 **0.005bb** 미만. 못 넘으면 그 차트는 **출하하지 않는다** (D34) |
+| HU(2-max) 회귀 | 같은 반복수에서 기존 HU 솔버와 전략·EV L∞ **1e-14** (독립 구현 두 개) |
 | 독립 솔버 대조 (fictitious play — CFR+ 아님) | 집계 레인지 6/6 일치, EV L∞ 0.0003bb |
 | HoldemResources 무앤티 Nash 표 | 2,010 셀 중 **2,007 일치** (나머지 3은 임계값 ±0.2bb 경계) |
-| 169 에퀴티 표 | 전수 계산 (몬테카를로 아님) |
+| 2-way 169 에퀴티 표 | 전수 계산 (몬테카를로 아님) |
+| 3-way 169³ 에퀴티 표 | 트리플당 10만 샘플 MC (전수는 1,100 코어시간, D32). 알려진 정답 7개와 ±0.5%p |
+| 멀티웨이 절단 (콜러 ≤ 2, D31) | `truncationGainBb` 를 차트마다 **측정**해 파일에 적고 0.02bb 초과면 미출하 |
 
-`chart_set.source` 에 생성 파라미터·커밋 해시·exploitability 가 전부 기록된다.
+`chart_set.source.params` 에 생성 파라미터·정확도·게임값·절단 이득·**한계 문장**이 전부 기록된다
+(칩 EV 만 — ICM 아님, 푸시/폴드만, 콜러 최대 2명, 번칭 없음, 스택 동일).
 
 ---
 
@@ -172,8 +178,9 @@ packages/server     @ggto/server     Hono 라우터, 정적 서빙, 진입점
 packages/preflop    @ggto/preflop    스키마·저장소·ggto-json·도달 레인지
 packages/trainer    @ggto/trainer    스팟·채점·SRS
 web/                @ggto/web        Vite + React 19 + Tailwind v4
-tools/chart-gen     시드 차트 생성기 (CFR+)
-tools/chart-import  ggto-json → SQLite
+tools/chart-gen     차트 생성기 (CFR+, 2~9-max 푸시/폴드 + 에퀴티 표 생성)
+tools/chart-import  ggto-json → SQLite (--aliases 로 은퇴 차트 정리)
+tools/trainer-migrate  은퇴 차트를 참조하는 트레이너 기록 이전 (npm run trainer:migrate)
 tools/shots         headless Chrome 레이아웃 검사 + 스크린샷 (ci 밖)
 scripts/            start-lan 등 운영 스크립트
 docs/specs/         페이즈별 정본 스펙

@@ -11,6 +11,18 @@ import { CLASS_KEYS } from '@ggto/preflop';
 import { pairCounts } from './pushFold.js';
 import type { EquityTable } from './equityTable.js';
 import type { Equity3 } from './equity3.js';
+import { matrixNodes, type PushFoldTree } from './tree.js';
+
+/**
+ * 3-way 표 없이 3-way 계산을 요구했을 때. **조용히 0 을 쓰지 않는다** — 그러면 멀티웨이
+ * 팟의 에퀴티가 0 인 차트가 게이트를 통과할 수도 있다.
+ */
+export class MissingEquity3Error extends Error {
+  constructor(label: string) {
+    super(`${label} needs the 3-way equity table (data/equity169-3way.bin) but it was not loaded`);
+    this.name = 'MissingEquity3Error';
+  }
+}
 
 export const N = CLASS_KEYS.length;
 export const N2 = N * N;
@@ -30,18 +42,33 @@ export interface NmaxTables {
   classProb: Float64Array;
   /** 169² — eq2(h, v) */
   eq2: Float64Array;
-  /** 169³ — eq3(h; y, c). 세 지분의 합은 정확히 1 */
-  share3: Float32Array;
-  /** 169³ — w3(h, y, c) */
-  w3: Float32Array;
+  /** 169³ — eq3(h; y, c). 세 지분의 합은 정확히 1. 표를 안 실었으면 null */
+  share3: Float32Array | null;
+  /** 169³ — w3(h, y, c). 표를 안 실었으면 null */
+  w3: Float32Array | null;
   /** `equity169.json@sha256:...` */
   equityRef: string;
-  /** `equity169-3way.bin@sha256:...` */
-  equity3Ref: string;
-  equity3Samples: number;
+  /** `equity169-3way.bin@sha256:...`. 표를 안 실었으면 null */
+  equity3Ref: string | null;
+  equity3Samples: number | null;
 }
 
-export function buildTables(equity: EquityTable, equity3: Equity3): NmaxTables {
+/** 이 트리가 3-way 표를 쓰는가. n=2 는 3-way 터미널도 (h,y) 행렬도 없어 false 다. */
+export function needsEquity3(tree: PushFoldTree): boolean {
+  return tree.terminals.some((z) => z.J.length >= 3) || matrixNodes(tree).size > 0;
+}
+
+/** 3-way 텐서를 꺼낸다. 트리가 쓰는데 표가 없으면 throw. 안 쓰면 빈 배열(색인되지 않는다). */
+export function resolveEquity3(tables: NmaxTables, tree: PushFoldTree, label: string): { w3: Float32Array; share3: Float32Array } {
+  if (!needsEquity3(tree)) return { w3: EMPTY3, share3: EMPTY3 };
+  if (tables.w3 === null || tables.share3 === null) throw new MissingEquity3Error(label);
+  return { w3: tables.w3, share3: tables.share3 };
+}
+
+const EMPTY3 = new Float32Array(0);
+
+/** `equity3` 가 null 이면 2-max 전용 표다 (n≥3 솔브는 `resolveEquity3` 에서 throw). */
+export function buildTables(equity: EquityTable, equity3: Equity3 | null): NmaxTables {
   const w2 = pairCounts();
   const rowTotal2 = new Float64Array(N);
   const comboCount = new Float64Array(N);
@@ -65,11 +92,11 @@ export function buildTables(equity: EquityTable, equity3: Equity3): NmaxTables {
     comboCount,
     classProb,
     eq2,
-    share3: equity3.share,
-    w3: equity3.w3,
+    share3: equity3 === null ? null : equity3.share,
+    w3: equity3 === null ? null : equity3.w3,
     equityRef: `equity169.json@sha256:${equity.meta.sha256}`,
-    equity3Ref: `equity169-3way.bin@sha256:${equity3.meta.sha256}`,
-    equity3Samples: equity3.meta.samples,
+    equity3Ref: equity3 === null ? null : `equity169-3way.bin@sha256:${equity3.meta.sha256}`,
+    equity3Samples: equity3 === null ? null : equity3.meta.samples,
   };
 }
 
@@ -96,8 +123,7 @@ export function foldVector(t: NmaxTables, strategy: Float64Array, out: Float64Ar
  * **희소 축약**: RM+ 는 정확한 0 을 만든다. σ(c)=0 인 c 를 건너뛰면 폴더(대부분 좁다)의
  * 이 루프가 5~10배 빨라진다. 건너뛴 항은 정확히 0 이므로 근사가 아니다.
  */
-export function foldMatrix(t: NmaxTables, strategy: Float64Array, out: Float64Array, support: Int32Array, supportLen: number): void {
-  const w3 = t.w3;
+export function foldMatrix(w3: Float32Array, t: NmaxTables, strategy: Float64Array, out: Float64Array, support: Int32Array, supportLen: number): void {
   const w2 = t.w2;
   if (supportLen === 0) {
     out.fill(0);

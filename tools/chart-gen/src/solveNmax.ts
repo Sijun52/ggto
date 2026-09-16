@@ -12,16 +12,24 @@
  * (D34 — 조용히 낮은 품질을 출하하지 않는다).
  */
 
-import { bestResponse } from './bestResponse.js';
+import { bestResponse, mixedLossBb } from './bestResponse.js';
 import type { GameSpec, TerminalPayoff } from './payoff.js';
 import { updateRegrets } from './pushFold.js';
-import { N, N2, REMAINING_PAIRS, foldMatrix, foldVector, supportOf, type NmaxTables } from './tables.js';
+import { N, N2, REMAINING_PAIRS, foldMatrix, foldVector, resolveEquity3, supportOf, type NmaxTables } from './tables.js';
 import { matrixNodes, type FolderInfo, type PushFoldTree } from './tree.js';
 
 /** P7.md 1.6 / D34: 어느 플레이어도 이만큼은 못 얻는다 (ε-균형). */
 export const EPSILON_GATE_BB = 0.005;
 /** 정지 목표. 게이트의 1/500 이다 (HU 실측 500 반복 ≈ 4e-6). */
 export const EPSILON_TARGET_BB = 1e-5;
+/**
+ * **혼합 손실 목표·게이트** (P3.md 3.5). `epsilonBb` 만으로는 부족하다는 것이 실측이다:
+ * ε < 1e-5 에서 멈춘 2-max 20bb 차트는 빈도 1% 이상으로 섞는 액션이 0.0174bb 를 잃어
+ * P3 의 기존 게이트(0.01bb)를 깬다. 그래서 두 조건을 **둘 다** 본다.
+ * 목표는 게이트의 절반이다.
+ */
+export const MIXED_LOSS_TARGET_BB = 0.005;
+export const MIXED_LOSS_GATE_BB = 0.01;
 export const MAX_ITERATIONS = 4000;
 export const CHECK_FROM = 100;
 export const CHECK_EVERY = 50;
@@ -31,13 +39,20 @@ export const ALGORITHM_NOTE =
 
 export class ExploitabilityGateError extends Error {
   readonly epsilonBb: number;
+  readonly mixedLossBb: number;
   readonly iterations: number;
-  constructor(label: string, epsilonBb: number, iterations: number) {
-    super(
-      `${label}: epsilon ${epsilonBb.toExponential(3)} bb after ${String(iterations)} iterations is at or above the gate ${String(EPSILON_GATE_BB)} bb`,
-    );
+  constructor(label: string, epsilonBb: number, mixed: number, iterations: number) {
+    const reasons: string[] = [];
+    if (!(epsilonBb < EPSILON_GATE_BB)) {
+      reasons.push(`epsilon ${epsilonBb.toExponential(3)} bb >= gate ${String(EPSILON_GATE_BB)} bb`);
+    }
+    if (!(mixed < MIXED_LOSS_GATE_BB)) {
+      reasons.push(`mixed action EV loss ${mixed.toExponential(3)} bb >= gate ${String(MIXED_LOSS_GATE_BB)} bb (P3 3.5)`);
+    }
+    super(`${label}: after ${String(iterations)} iterations, ${reasons.join(' and ')}`);
     this.name = 'ExploitabilityGateError';
     this.epsilonBb = epsilonBb;
+    this.mixedLossBb = mixed;
     this.iterations = iterations;
   }
 }
@@ -53,6 +68,8 @@ export interface NmaxResult {
   nodes: NmaxNodeResult[];
   /** max_i gain_i (게이트 대상) */
   epsilonBb: number;
+  /** 빈도 1% 이상으로 플레이되는 액션의 최대 EV 손실 (게이트 대상, P3.md 3.5) */
+  mixedLossBb: number;
   /** Σ_i gain_i (OpenSpiel nash_conv) */
   nashConvBb: number;
   /** nashConv / n (OpenSpiel: 2인 상수합에서 착취가능액 — 기존 HU 필드와 호환) */
@@ -67,6 +84,7 @@ export interface NmaxResult {
 export interface SolveOptions {
   maxIterations?: number;
   epsilonTarget?: number;
+  mixedLossTarget?: number;
   /** 게이트를 넘지 못해도 던지지 않는다 (실험·진단용). 기본 false */
   allowGateFailure?: boolean;
   label?: string;
@@ -164,9 +182,12 @@ export function solveNmax(
 ): NmaxResult {
   const maxIterations = opts.maxIterations ?? MAX_ITERATIONS;
   const epsilonTarget = opts.epsilonTarget ?? EPSILON_TARGET_BB;
+  const mixedTarget = opts.mixedLossTarget ?? MIXED_LOSS_TARGET_BB;
   const label = opts.label ?? `${String(spec.n)}-max ${spec.antePreset} ${String(spec.stack)}bb`;
   const nodeCount = tree.nodes.length;
-  const { w2, w3, share3, eq2, rowTotal2, classProb } = tables;
+  const { w2, eq2, rowTotal2, classProb } = tables;
+  // 3-way 표가 필요한 트리(n≥3)인데 안 실렸으면 여기서 멈춘다 — 0 으로 계산하지 않는다.
+  const { w3, share3 } = resolveEquity3(tables, tree, label);
   const plans = buildPlans(tree, payoffs);
 
   const strat = Array.from({ length: nodeCount }, () => new Float64Array(N).fill(0.5));
@@ -196,7 +217,7 @@ export function solveNmax(
       const sigma = strat[k] as Float64Array;
       supportLen[k] = supportOf(sigma, support[k] as Int32Array);
       foldVector(tables, sigma, nfVec[k] as Float64Array);
-      if (needsMatrix.has(k)) foldMatrix(tables, sigma, nfMat[k] as Float64Array, support[k] as Int32Array, supportLen[k] as number);
+      if (needsMatrix.has(k)) foldMatrix(w3, tables, sigma, nfMat[k] as Float64Array, support[k] as Int32Array, supportLen[k] as number);
       dirty[k] = 0;
     }
   };
@@ -332,7 +353,8 @@ export function solveNmax(
         for (let h = 0; h < N; h++) a[h] = (acc[h] as number) / weightSum;
       }
       const probe = bestResponse(tree, spec, tables, payoffs, avg);
-      if (Math.max(...probe.gains) < epsilonTarget) break;
+      // 두 조건을 다 만족해야 멈춘다: 평균 착취(ε)와 **점별** 혼합 손실 (P3.md 3.5).
+      if (Math.max(...probe.gains) < epsilonTarget && mixedLossBb(avg, probe.ev) < mixedTarget) break;
     }
   }
 
@@ -346,9 +368,10 @@ export function solveNmax(
   const gains = final.gains;
   const epsilonBb = Math.max(...gains);
   const nashConvBb = gains.reduce((a, b) => a + b, 0);
+  const mixed = mixedLossBb(avg, final.ev);
 
-  if (!(epsilonBb < EPSILON_GATE_BB) && opts.allowGateFailure !== true) {
-    throw new ExploitabilityGateError(label, epsilonBb, iterations);
+  if ((!(epsilonBb < EPSILON_GATE_BB) || !(mixed < MIXED_LOSS_GATE_BB)) && opts.allowGateFailure !== true) {
+    throw new ExploitabilityGateError(label, epsilonBb, mixed, iterations);
   }
 
   return {
@@ -357,6 +380,7 @@ export function solveNmax(
       ev: final.ev[k] as Float64Array,
     })),
     epsilonBb,
+    mixedLossBb: mixed,
     nashConvBb,
     exploitabilityBb: nashConvBb / spec.n,
     gainsBb: gains,

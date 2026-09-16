@@ -1,7 +1,7 @@
 /**
  * 차트 뷰어 테스트. P2.md 9.
  *
- * 응답 본문은 **7.1 생성기 출력**(web/test/fixtures/hu-pushfold-10bb.json, 실제 `npm run seed`
+ * 응답 본문은 **7.1 생성기 출력**(web/test/fixtures/pf-2max-none-10bb.json, 실제 `npm run seed`
  * 산출물)을 core 로 1326 전개해 만든다. 손으로 쓴 1326 배열은 쓰지 않는다.
  */
 
@@ -11,7 +11,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { HAND_CLASS_COUNT, comboCards, formatCard, handClassCombos, handClassName, parseHandClass } from '@ggto/core';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ChartsPage, breadcrumbSeqs } from '../src/pages/ChartsPage';
+import { ChartsPage, breadcrumbSeqs, compareSets } from '../src/pages/ChartsPage';
 import { useUiStore } from '../src/store/ui';
 
 interface FixtureNode {
@@ -29,7 +29,7 @@ interface Fixture {
 }
 
 const CHART = JSON.parse(
-  readFileSync(resolve(import.meta.dirname, 'fixtures/hu-pushfold-10bb.json'), 'utf8'),
+  readFileSync(resolve(import.meta.dirname, 'fixtures/pf-2max-none-10bb.json'), 'utf8'),
 ) as Fixture;
 
 /** 169 키 → 1326 행 (임포터와 같은 규칙: 클래스의 모든 콤보에 같은 행) */
@@ -291,5 +291,40 @@ describe('9 차트 뷰어', () => {
       expect(screen.getByTestId('pos-tab-BB').textContent).toContain('•');
     });
     expect(urls.some((u) => u === '/api/charts/1/node?seq=A')).toBe(true);
+  });
+});
+
+describe('P7 8 셋 목록 정렬', () => {
+  const set = (id: number, seats: number, ante: string, stack: number, name: string): Parameters<typeof compareSets>[0] =>
+    ({
+      id,
+      name,
+      gameType: 'mtt',
+      config: {
+        positions: Array.from({ length: seats }, (_u, i) => `P${String(i)}`),
+        blinds: [],
+        ante: { mode: ante },
+        stack,
+      },
+      rake: { mode: 'none' },
+      resolution: '169',
+      hasEv: true,
+      evBasis: 'stack_delta_from_node',
+      source: { kind: 'generated', name: 'x' },
+      formatVersion: 1,
+      contentHash: 'a'.repeat(64),
+      importedAt: 0,
+    }) as unknown as Parameters<typeof compareSets>[0];
+
+  it('8 (사이즈, 앤티 none→bb_ante→per_player, 스택) 순이다', () => {
+    const list = [
+      set(1, 9, 'per_player', 10, '9-max pp 10'),
+      set(2, 2, 'none', 20, '2-max none 20'),
+      set(3, 2, 'none', 5, '2-max none 5'),
+      set(4, 9, 'none', 10, '9-max none 10'),
+      set(5, 2, 'bb_ante', 5, '2-max bba 5'),
+      set(6, 9, 'bb_ante', 3, '9-max bba 3'),
+    ];
+    expect([...list].sort(compareSets).map((s) => s.id)).toEqual([3, 2, 5, 4, 6, 1]);
   });
 });

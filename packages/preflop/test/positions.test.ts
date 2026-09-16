@@ -34,10 +34,21 @@ describe('tablePositions (P7 2.1)', () => {
     }
   });
 
-  it('is a suffix chain: tablePositions(n) ends with tablePositions(n-1)', () => {
-    for (let n = MIN_TABLE_SIZE + 1; n <= MAX_TABLE_SIZE; n++) {
-      expect(tablePositions(n).slice(1)).toEqual([...tablePositions(n - 1)]);
+  /**
+   * "n 에서 첫 자리를 떼면 n-1" 은 **성립하지 않는다** (2.1 의 표): 9-max 에서 UTG 를 떼면
+   * `UTG1 UTG2 LJ …` 인데 8-max 는 `UTG UTG1 LJ …` 다. 사라지는 자리는 맨 앞이 아니라
+   * "UTG 다음" 이기 때문이다. 실제로 성립하는 성질만 고정한다.
+   */
+  it('always ends with CO BTN SB BB (n>=4) and starts with UTG (n>=5)', () => {
+    for (let n = 4; n <= MAX_TABLE_SIZE; n++) {
+      expect(tablePositions(n).slice(-4)).toEqual(['CO', 'BTN', 'SB', 'BB']);
     }
+    for (let n = 5; n <= MAX_TABLE_SIZE; n++) {
+      expect(tablePositions(n)[0]).toBe('UTG');
+    }
+    // 앞 자리는 UTG 뒤에서 사라진다: 9 -> 8 은 UTG2, 8 -> 7 은 UTG1 이 빠진다
+    expect(tablePositions(9).filter((p) => !tablePositions(8).includes(p))).toEqual(['UTG2']);
+    expect(tablePositions(8).filter((p) => !tablePositions(7).includes(p))).toEqual(['UTG1']);
   });
 
   it('rejects sizes outside 2..9', () => {

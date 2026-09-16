@@ -26,6 +26,16 @@ export {
   type SourceKind,
 } from './types.js';
 
+export {
+  ALIAS_FILE_NAME,
+  ALIAS_FORMAT,
+  ALIAS_VERSION,
+  AliasFileError,
+  isContentHash,
+  parseAliasFile,
+  type AliasFile,
+  type ChartAlias,
+} from './aliases.js';
 export { parseGgtoJson } from './jsonShape.js';
 export { contentHash, expandTo1326, formatGgtoJson, sha256Hex, toGgtoJson } from './codec.js';
 export { childSeq, validateChart, type ValidatedChart, type ValidatedNode } from './validate.js';

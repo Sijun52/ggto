@@ -346,7 +346,7 @@ describe('P3 6 리포트 (서비스)', () => {
     const repo = seededRepo();
     const clock = fixedClock(T0);
     const docs = fixtureDocs();
-    repo.importSet(withoutEv(docs[0] as never, 'HU push/fold 10bb (no EV)'), { source: 'generated' });
+    repo.importSet(withoutEv(docs[0] as never, '2-max (HU) push/fold 10bb (no EV)'), { source: 'generated' });
     const trainer = openTrainer({ chartRepo: repo, dbPath: ':memory:', now: clock.now });
     try {
       const noEvHash = repo.listSets().find((s) => !s.hasEv)?.contentHash;
@@ -385,7 +385,7 @@ describe('P3 6 리포트 (서비스)', () => {
       expect(done.done).toBe(true);
       if (!done.done) return;
       expect(done.report.scope).toEqual({ sessionId: s.sessionId, durationMs: 5000 });
-      expect(done.report.bySet[0]?.name).toContain('HU push/fold');
+      expect(done.report.bySet[0]?.name).toContain('push/fold');
     } finally {
       h.close();
     }

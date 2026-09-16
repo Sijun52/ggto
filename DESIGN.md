@@ -61,8 +61,11 @@ GGTO/
 │                            #   Cargo.lock 커밋 (bincode rc.3 핀) · .cargo/config.toml 린트 우회 · rust-toolchain 1.98.1
 ├─ web/                       # Vite + React
 ├─ tools/
-│  ├─ chart-import/           # ggto-json → SQLite CLI (P2)
-│  ├─ chart-gen/              # 자체 생성 시드 차트 (P2)
+│  ├─ chart-import/           # ggto-json → SQLite CLI (P2). `--aliases` 로 은퇴 차트 정리 (P7)
+│  ├─ chart-gen/              # 자체 생성 차트 (P2 HU, P7 2~9-max MTT 푸시/폴드)
+│  │                          #   tree/payoff/solveNmax/bestResponse/truncation/chartNmax (P7)
+│  │                          #   data/equity169.json (2-way 전수) · equity169-3way.bin (3-way MC)
+│  ├─ trainer-migrate/        # npm run trainer:migrate — 은퇴 차트의 기록 이전 (P7, D35)
 │  ├─ shots/                  # headless Chrome 레이아웃 검사·스크린샷 (P3M, ci 밖)
 │  └─ solve/                  # npm run solve — 서버 없이 큐·캐시를 직접 쓰는 CLI (P4)
 ├─ scripts/                   # start-lan · build-solver · solver-gate · test-solver (P3M/P4)
@@ -323,8 +326,10 @@ POST /api/range/equity         {ranges, board}       → 에퀴티/에퀴티 분
 | **P3M** | 모바일 UX: 반응형 격자 + 터치 타겟 44px + 하단 액션 바 + 리포트 카드 + `GGTO_HOST` LAN opt-in | 휴대폰으로 20문제를 한 손으로 돈다. 완료 조건: `npm run check:mobile` exit 0 | 소 |
 | **P4** | `ggto-solver`: postflop-solver 래핑 + 잡큐 + 캐시 + SSE | CLI로 솔브 돌아감. **완료 조건: `npm run ci` exit 0 (Rust 없이) 그리고 `npm run ci:solver` exit 0** | 대 |
 | **P5** | 포스트플랍 탐색 UI: 액션 트리 + 격자 + 런아웃 히트맵 (모바일 한 열 기준) | 휴대폰에서 솔브를 만들고 라인을 타고 내려간다. 완료 조건: `npm run check:mobile` 에 `/solve` 5 화면(목록·폼·행동 노드·chance·터미널) 포함, exit 0 | 대 |
+| **P7** | 프리플랍 생성기 확장: MTT 푸시/폴드 **2~9-max × 앤티 3종 × 스택 15단** (360 차트). 모델 `pf-nmax-v1`, 게이트 `epsilonBb < 0.005` (D34), 콜러 상한 2 (D31) | `npm run gen:charts` 로 사다리 전체. 옛 HU 6셋은 은퇴 + `trainer:migrate` | 대 |
+| **P8** | 차트 UI 재설계 (360 셋을 고를 수 있는 필터·한계 표기) | | 중 |
 | **P6** | 트레이너 v2: **포스트플랍 스팟** (SRS·리크 분석은 P3 에서 앞당겼다) | | 중 |
-| **P7+** | 핸드히스토리 임포트 → 자동 리뷰 (선택) | | 대 |
+| **P7b+** | 림프·미니레이즈(측정된 포스트플랍 EV 모델 필요, D30) · ICM · 핸드히스토리 임포트 (선택) | | 대 |
 
 **P2까지 오면 이미 쓸모가 있고, P3까지 오면 매일 켠다.** P4가 가장 큰 벽이니 그 전에 앱이 자립하도록 순서를 잡았다.
 

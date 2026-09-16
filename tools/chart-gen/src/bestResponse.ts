@@ -14,7 +14,7 @@
  */
 
 import { COMBO_COUNT } from '@ggto/core';
-import { N, N2, REMAINING_PAIRS, type NmaxTables } from './tables.js';
+import { N, N2, REMAINING_PAIRS, resolveEquity3, type NmaxTables } from './tables.js';
 import type { GameSpec, TerminalPayoff } from './payoff.js';
 import { foldNowValue } from './payoff.js';
 import { matrixNodes, type FolderInfo, type PushFoldTree } from './tree.js';
@@ -64,7 +64,8 @@ export function bestResponse(
   strategy: readonly Float64Array[],
 ): BestResponseResult {
   const nodeCount = tree.nodes.length;
-  const { w2, w3, share3, eq2, rowTotal2, classProb } = tables;
+  const { w2, eq2, rowTotal2, classProb } = tables;
+  const { w3, share3 } = resolveEquity3(tables, tree, `${String(spec.n)}-max best response`);
 
   // --- 1. 폴더 조건부 확률 (조밀) ---
   const nfVec: Float64Array[] = [];
@@ -292,3 +293,38 @@ function activeNodeOf(tree: PushFoldTree, seq: string, player: number): number {
 }
 
 export const TOTAL_COMBOS = COMBO_COUNT;
+
+/**
+ * "실제로 플레이되는" 빈도 하한. `@ggto/trainer` 의 `MIX_EPS` 와 같은 값이다 (P3.md 3.4).
+ * 패키지를 의존하지 않으려고 상수를 여기에 다시 적는다 — 두 값이 갈라지면 P3 3.5 게이트가
+ * 차트를 거부하므로 테스트가 잡는다.
+ */
+export const PLAYED_MIN_FREQ = 0.01;
+
+/**
+ * **혼합 손실** `mixedLossBb` (P3.md 3.5 의 실데이터 게이트를 생성기 안으로 옮긴 것).
+ *
+ * 빈도 >= 1% 로 플레이되는 액션의 EV 손실 중 최대. 정확한 균형에서는 0 이다. 이것이
+ * 필요한 이유: `epsilonBb` 는 도달 확률로 **가중된 평균**이라 작아도, 무차별 근처 클래스의
+ * 평균 전략이 덜 수렴하면 "차트가 1% 이상 섞는 액션인데 EV 를 0.017bb 잃는" 상태가 남는다.
+ * 그러면 트레이너가 **차트 자신의 권장 혼합**을 Perfect 로 안 준다 (P3 3.3 은 EV 손실로
+ * 채점한다). 2-max 실측: ε 목표 1e-5 에서 최대 0.0174bb, 1e-6 에서 0.0018bb.
+ */
+export function mixedLossBb(
+  strategy: readonly Float64Array[],
+  ev: readonly Float64Array[],
+  minFreq: number = PLAYED_MIN_FREQ,
+): number {
+  let worst = 0;
+  for (const [k, row] of ev.entries()) {
+    const sigma = strategy[k] as Float64Array;
+    for (let h = 0; h < N; h++) {
+      const e = row[h] as number;
+      const p = sigma[h] as number;
+      // 두 액션뿐이다: 폴드(EV 0) 와 비폴드(EV e). 최선은 max(0, e).
+      if (p >= minFreq) worst = Math.max(worst, Math.max(0, -e));
+      if (1 - p >= minFreq) worst = Math.max(worst, Math.max(0, e));
+    }
+  }
+  return worst;
+}

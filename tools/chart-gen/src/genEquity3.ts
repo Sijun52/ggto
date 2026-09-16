@@ -10,7 +10,7 @@
 
 import { fork } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { closeSync, existsSync, fsyncSync, openSync, readFileSync, rmSync, statSync, truncateSync, writeFileSync, writeSync } from 'node:fs';
 import { cpus } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -30,38 +30,93 @@ import { SAMPLER_VERSION, quantizeShares, sampleTriple } from './equity3Mc.js';
 
 const PROGRESS_EVERY = 200;
 
-interface ShardPayload {
-  index: number[];
-  data: number[];
-}
-
 interface ShardMessage {
   type: 'progress' | 'done';
   done?: number;
-  buffer?: ShardPayload;
 }
 
-function runShard(shard: number, shards: number, samples: number): void {
+/** 샤드 체크포인트 한 항목: [multisetIndex, w3, share_i, share_j, share_k] u32 LE */
+const PART_RECORD_BYTES = 20;
+
+export function shardPath(binOut: string, shard: number): string {
+  return `${binOut}.shard${String(shard)}.part`;
+}
+
+/**
+ * 워커 하나. **체크포인트를 남긴다** — 이 작업은 6 워커로도 한 시간이 넘고, 도중에 죽으면
+ * 전부 잃는다. 200 트리플마다 자기 샤드 파일에 덧붙이고, 다시 켜면 이미 적힌 개수만큼
+ * 건너뛴다 (샤드 안의 처리 순서가 결정적이라 개수만으로 재개 지점이 정해진다).
+ */
+function runShard(shard: number, shards: number, samples: number, binOut: string): void {
   const triples = allTriples();
-  const index: number[] = [];
-  const data: number[] = [];
+  const path = shardPath(binOut, shard);
+  let already = 0;
+  if (existsSync(path)) {
+    const size = statSync(path).size;
+    if (size % PART_RECORD_BYTES !== 0) {
+      // 마지막 flush 가 잘린 경우: 온전한 레코드까지만 인정하고 뒤를 버린다.
+      truncateSync(path, size - (size % PART_RECORD_BYTES));
+    }
+    already = Math.floor(size / PART_RECORD_BYTES);
+  }
+  const handle = openSync(path, 'a');
+  const buffer = new Uint32Array(PROGRESS_EVERY * 5);
+  let pending = 0;
   let done = 0;
+  const flush = (): void => {
+    if (pending === 0) return;
+    writeSync(handle, new Uint8Array(buffer.buffer, 0, pending * PART_RECORD_BYTES));
+    fsyncSync(handle);
+    pending = 0;
+  };
   for (let t = shard; t < TRIPLE_COUNT; t += shards) {
+    done++;
+    if (done <= already) continue;
     const i = triples[t * 3] as number;
     const j = triples[t * 3 + 1] as number;
     const k = triples[t * 3 + 2] as number;
     const { shares, w3 } = sampleTriple(i, j, k, samples);
     const [qa, qb, qc] = quantizeShares(i, j, k, shares);
-    index.push(t);
-    data.push(w3, qa, qb, qc);
-    done++;
-    if (done % PROGRESS_EVERY === 0) {
+    buffer[pending * 5] = t;
+    buffer[pending * 5 + 1] = w3;
+    buffer[pending * 5 + 2] = qa;
+    buffer[pending * 5 + 3] = qb;
+    buffer[pending * 5 + 4] = qc;
+    pending++;
+    if (pending === PROGRESS_EVERY) {
+      flush();
       const msg: ShardMessage = { type: 'progress', done: PROGRESS_EVERY };
       process.send?.(msg);
     }
   }
-  const msg: ShardMessage = { type: 'done', buffer: { index, data } };
+  flush();
+  closeSync(handle);
+  const msg: ShardMessage = { type: 'done' };
   process.send?.(msg);
+}
+
+/** 샤드 체크포인트 파일들을 읽어 최종 레코드 배열로 합친다. */
+function collectShards(binOut: string, workers: number): { out: Uint16Array; filled: Uint8Array } {
+  const out = new Uint16Array(TRIPLE_COUNT * 4);
+  const filled = new Uint8Array(TRIPLE_COUNT);
+  for (let shard = 0; shard < workers; shard++) {
+    const path = shardPath(binOut, shard);
+    if (!existsSync(path)) throw new Error(`shard checkpoint ${path} is missing`);
+    const bytes = readFileSync(path);
+    if (bytes.length % PART_RECORD_BYTES !== 0) throw new Error(`shard checkpoint ${path} has a truncated record`);
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.length);
+    for (let r = 0; r * PART_RECORD_BYTES < bytes.length; r++) {
+      const base = r * PART_RECORD_BYTES;
+      const t = view.getUint32(base, true);
+      if (t >= TRIPLE_COUNT) throw new Error(`shard checkpoint ${path} record ${String(r)} has index ${String(t)}`);
+      out[t * 4] = view.getUint32(base + 4, true);
+      out[t * 4 + 1] = view.getUint32(base + 8, true);
+      out[t * 4 + 2] = view.getUint32(base + 12, true);
+      out[t * 4 + 3] = view.getUint32(base + 16, true);
+      filled[t] = 1;
+    }
+  }
+  return { out, filled };
 }
 
 async function runParent(binOut: string, metaOut: string, samples: number, workers: number): Promise<void> {
@@ -69,44 +124,42 @@ async function runParent(binOut: string, metaOut: string, samples: number, worke
   const t0 = Date.now();
   let done = 0;
 
-  const shards = await Promise.all(
+  await Promise.all(
     Array.from(
       { length: workers },
       (_unused, shard) =>
-        new Promise<ShardPayload>((resolvePromise, reject) => {
-          const child = fork(self, ['--shard', String(shard), '--shards', String(workers), '--samples', String(samples)]);
+        new Promise<void>((resolvePromise, reject) => {
+          const child = fork(self, [
+            '--shard',
+            String(shard),
+            '--shards',
+            String(workers),
+            '--samples',
+            String(samples),
+            '--out',
+            binOut,
+          ]);
           child.on('message', (msg: ShardMessage) => {
-            if (msg.type === 'progress') {
-              done += msg.done ?? 0;
-              const pct = ((done / TRIPLE_COUNT) * 100).toFixed(2);
-              const elapsed = (Date.now() - t0) / 1000;
-              const eta = done === 0 ? 0 : (elapsed / done) * (TRIPLE_COUNT - done);
-              process.stdout.write(
-                `\r${String(done)}/${String(TRIPLE_COUNT)} triples (${pct}%) ${elapsed.toFixed(0)}s elapsed, eta ${eta.toFixed(0)}s   `,
-              );
-            } else if (msg.type === 'done') resolvePromise(msg.buffer ?? { index: [], data: [] });
+            if (msg.type !== 'progress') return;
+            done += msg.done ?? 0;
+            const pct = ((done / TRIPLE_COUNT) * 100).toFixed(2);
+            const elapsed = (Date.now() - t0) / 1000;
+            const eta = done === 0 ? 0 : (elapsed / done) * (TRIPLE_COUNT - done);
+            process.stdout.write(
+              `${String(done)}/${String(TRIPLE_COUNT)} triples (${pct}%) ${elapsed.toFixed(0)}s elapsed, eta ${eta.toFixed(0)}s
+`,
+            );
           });
           child.on('error', reject);
           child.on('exit', (code) => {
-            if (code !== 0) reject(new Error(`shard ${String(shard)} exited with code ${String(code)}`));
+            if (code === 0) resolvePromise();
+            else reject(new Error(`shard ${String(shard)} exited with code ${String(code)}`));
           });
         }),
     ),
   );
-  process.stdout.write('\n');
 
-  const out = new Uint16Array(TRIPLE_COUNT * 4);
-  const filled = new Uint8Array(TRIPLE_COUNT);
-  for (const shardResult of shards) {
-    for (let n = 0; n < shardResult.index.length; n++) {
-      const t = shardResult.index[n] as number;
-      out[t * 4] = shardResult.data[n * 4] as number;
-      out[t * 4 + 1] = shardResult.data[n * 4 + 1] as number;
-      out[t * 4 + 2] = shardResult.data[n * 4 + 2] as number;
-      out[t * 4 + 3] = shardResult.data[n * 4 + 3] as number;
-      filled[t] = 1;
-    }
-  }
+  const { out, filled } = collectShards(binOut, workers);
   for (let t = 0; t < TRIPLE_COUNT; t++) {
     if (filled[t] !== 1) throw new Error(`triple ${String(t)} was never computed (shard bookkeeping bug)`);
   }
@@ -156,13 +209,14 @@ if (!Number.isInteger(samples) || samples < 1) throw new Error('--samples must b
 // 전단사 가정이 깨지면 레코드가 서로 덮어써진다. 시작 전에 한 번 부딪혀 본다.
 if (multisetIndex(168, 168, 168) !== TRIPLE_COUNT - 1) throw new Error('multisetIndex is not a bijection onto 0..818804');
 
+const here = dirname(fileURLToPath(import.meta.url));
+const binOut = values.out === undefined ? resolve(here, '../data/equity169-3way.bin') : resolve(values.out);
+const metaOut = binOut.replace(/\.bin$/, '.json');
+if (metaOut === binOut) throw new Error('--out must end with .bin');
+
 if (values.shard !== undefined && values.shards !== undefined) {
-  runShard(Number(values.shard), Number(values.shards), samples);
+  runShard(Number(values.shard), Number(values.shards), samples, binOut);
 } else {
-  const here = dirname(fileURLToPath(import.meta.url));
-  const binOut = values.out === undefined ? resolve(here, '../data/equity169-3way.bin') : resolve(values.out);
-  const metaOut = binOut.replace(/\.bin$/, '.json');
-  if (metaOut === binOut) throw new Error('--out must end with .bin');
   const workers = values.workers === undefined ? Math.max(1, cpus().length) : Number(values.workers);
   await runParent(binOut, metaOut, samples, workers);
 }

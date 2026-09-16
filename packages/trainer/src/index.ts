@@ -60,7 +60,7 @@ export {
   qualityOf,
   type SrsState,
 } from './srs.js';
-export { TRAINER_SCHEMA_SQL, TRAINER_SCHEMA_VERSION, SchemaVersionError, migrate } from './schema.js';
+export { HASH_ALIAS_SQL, TRAINER_SCHEMA_SQL, TRAINER_SCHEMA_VERSION, SchemaVersionError, migrate } from './schema.js';
 export { buildPool, collectPool, findNode, findNodeByKey, sampleCombo, setHashes, spotKeyOf, type Pool, type PoolNode } from './pool.js';
 export {
   LEAK_CAP,
@@ -73,7 +73,8 @@ export {
 } from './sampler.js';
 export { DUE_SCAN_LIMIT, LEAK_WINDOW_DAYS, RESAMPLE_TRIES, drawSpotKey, leakMeans } from './draw.js';
 export { LEAK_MIN_ATTEMPTS, LEAK_MIN_MEAN_BB, aggregate, byCategory, bySet, leaksOf } from './report.js';
-export { TrainerStore, type AttemptAgg, type AttemptInsert, type SessionRow } from './store.js';
+export { TrainerStore, type AliasApplyResult, type AttemptAgg, type AttemptInsert, type SessionRow } from './store.js';
+export { applyAliases, type AliasMigrationReport } from './migrate.js';
 export {
   MAX_MS_TAKEN,
   MAX_SESSION_COUNT,

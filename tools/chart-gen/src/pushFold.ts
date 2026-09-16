@@ -170,14 +170,46 @@ export function solvePushFold(
     callAvg[i] = (callSum[i] as number) / weightSum;
   }
 
-  // --- exploitability: 평균 전략에 대한 정확한 best response ---
-  sbDiff(m, callAvg, dSb);
-  bbDiff(m, jamAvg, dBb);
+  const ev = evaluateHu(m, jamAvg, callAvg);
+  return {
+    stack,
+    iterations,
+    sbJam: jamAvg,
+    bbCall: callAvg,
+    sbJamEv: ev.sbJamEv,
+    bbCallEv: ev.bbCallEv,
+    exploitabilityBb: ev.nashConvBb / 2,
+    nashConvBb: ev.nashConvBb,
+    sbValueBb: ev.sbValueBb,
+  };
+}
+
+/** 임의의 전략쌍에 대한 HU 정확도 지표 (P7.md 5.2 (a) 의 역방향 검사가 쓴다) */
+export interface HuEvaluation {
+  /** SB 의 BR 이득 (bb/핸드) */
+  sbGainBb: number;
+  /** BB 의 BR 이득 (bb/핸드) */
+  bbGainBb: number;
+  nashConvBb: number;
+  /** ε-균형의 정의 (D34): max_i gain_i */
+  epsilonBb: number;
+  /** SB 의 한 판 전체 기대값 (bb/핸드) */
+  sbValueBb: number;
+  sbJamEv: Float64Array;
+  bbCallEv: Float64Array;
+}
+
+function evaluateHu(m: Matrices, jam: Float64Array, call: Float64Array): HuEvaluation {
+  const n = CLASS_COUNT;
+  const dSb = new Float64Array(n);
+  const dBb = new Float64Array(n);
+  sbDiff(m, call, dSb);
+  bbDiff(m, jam, dBb);
   let sbGain = 0;
   let sbValue = 0;
   for (let h = 0; h < n; h++) {
     const d = dSb[h] as number;
-    const s = jamAvg[h] as number;
+    const s = jam[h] as number;
     sbGain += Math.max(0, d) - s * d;
     // V_fold(h) = −0.5·W(h) 를 기준으로 한 한 판 전체 기대값
     sbValue += s * d - 0.5 * (m.rowTotal[h] as number);
@@ -185,9 +217,8 @@ export function solvePushFold(
   let bbGain = 0;
   for (let v = 0; v < n; v++) {
     const d = dBb[v] as number;
-    bbGain += Math.max(0, d) - (callAvg[v] as number) * d;
+    bbGain += Math.max(0, d) - (call[v] as number) * d;
   }
-  const nashConv = (sbGain + bbGain) / m.total;
 
   // --- 파일에 쓸 EV (3.3 기준: 노드 이후 스택 변화, fold = 0) ---
   const sbJamEv = new Float64Array(n);
@@ -195,7 +226,7 @@ export function solvePushFold(
   const bbCallEv = new Float64Array(n);
   for (let v = 0; v < n; v++) {
     let reach = 0;
-    for (let h = 0; h < n; h++) reach += (jamAvg[h] as number) * (m.w[h * n + v] as number);
+    for (let h = 0; h < n; h++) reach += (jam[h] as number) * (m.w[h * n + v] as number);
     if (!(reach > 0)) {
       // SB 가 어떤 핸드로도 잼하지 않으면 이 노드는 도달 불가라 EV 가 정의되지 않는다.
       // 균형에서는 일어나지 않는다 (AA 는 항상 잼). 조용히 0 을 쓰지 않고 드러낸다.
@@ -203,18 +234,30 @@ export function solvePushFold(
     }
     bbCallEv[v] = (dBb[v] as number) / reach;
   }
-
   return {
-    stack,
-    iterations,
-    sbJam: jamAvg,
-    bbCall: callAvg,
+    sbGainBb: sbGain / m.total,
+    bbGainBb: bbGain / m.total,
+    nashConvBb: (sbGain + bbGain) / m.total,
+    epsilonBb: Math.max(sbGain, bbGain) / m.total,
+    sbValueBb: sbValue / m.total,
     sbJamEv,
     bbCallEv,
-    exploitabilityBb: nashConv / 2,
-    nashConvBb: nashConv,
-    sbValueBb: sbValue / m.total,
   };
+}
+
+/**
+ * **HU 모델 안에서** 주어진 전략쌍을 평가한다 (P7.md 5.2). n-max 솔버가 낸 n=2 해를
+ * 옛 코드 경로로 채점하는 데 쓴다 — 두 구현이 같은 균형을 말하는지 보는 것이 목적이라
+ * 솔버를 돌리지 않는다.
+ */
+export function huEvaluate(
+  equity: readonly (readonly number[])[],
+  stack: number,
+  jam: Float64Array,
+  call: Float64Array,
+  w: Float64Array = pairCounts(),
+): HuEvaluation {
+  return evaluateHu(matrices(equity, stack, w), jam, call);
 }
 
 /** 1326 가중 잼 콤보 수 (성질 게이트 (b) 단조성 검사용) */

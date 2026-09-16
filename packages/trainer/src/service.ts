@@ -141,6 +141,30 @@ export class TrainerService {
     return { sessionId: id, seed, count: req.count, answered: 0, finished: false, createdAt };
   }
 
+  /**
+   * 은퇴한 차트를 참조하는 attempt 수 (P7.md 7.1 의 기동 힌트).
+   *
+   * 조건은 둘 다다: (a) 그 해시가 **차트 저장소에 없고** (b) `aliases.json` 의 `from` 에
+   * 있다. (a) 만 보면 사용자가 그냥 지운 차트까지 세어 매번 힌트가 뜬다.
+   *
+   * 기록은 **읽기만** 한다 — 옮기는 것은 `npm run trainer:migrate` 뿐이다 (D16).
+   */
+  retiredAttempts(aliases: readonly { from: string; to: string }[]): { attempts: number; hashes: string[] } {
+    if (aliases.length === 0) return { attempts: 0, hashes: [] };
+    const live = new Set(this.#repo.listSets().map((s) => s.contentHash));
+    const counts = this.#store.attemptHashCounts();
+    let attempts = 0;
+    const hashes: string[] = [];
+    for (const alias of aliases) {
+      if (live.has(alias.from)) continue;
+      const n = counts.get(alias.from) ?? 0;
+      if (n === 0) continue;
+      attempts += n;
+      hashes.push(alias.from);
+    }
+    return { attempts, hashes };
+  }
+
   next(sessionId: number): NextResult {
     const session = this.#requireSession(sessionId);
     const now = this.#now();

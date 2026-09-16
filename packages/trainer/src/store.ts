@@ -51,6 +51,19 @@ export interface AttemptAgg {
   mixed: number;
 }
 
+/** `applyAliases` 한 건의 결과 (P7.md 7.2 의 출력) */
+export interface AliasApplyResult {
+  from: string;
+  to: string;
+  attempts: number;
+  srs: number;
+  /** PK 충돌로 버린 `srs_state` 행 수 */
+  srsConflicts: number;
+  sessions: number;
+  /** 이미 `hash_alias` 에 있어 건너뛴 별칭 */
+  alreadyApplied: boolean;
+}
+
 export interface DueSpot {
   spotKey: string;
   dueAt: number;
@@ -323,6 +336,128 @@ export class TrainerStore {
       verdict: r.verdict as Verdict,
       mixed: r.mixed,
     }));
+  }
+
+  /**
+   * 은퇴한 차트의 기록을 새 `content_hash` 로 옮긴다 (P7.md 7.2, D35). **단일 트랜잭션**이다 —
+   * attempt 만 옮기고 srs 를 놓치면 같은 스팟의 복습 이력이 둘로 갈라진다.
+   *
+   * 멱등: `hash_alias` 에 이미 있는 별칭은 건너뛴다. 두 번째 실행은 전부 0 행이다.
+   *
+   * `spot_key` = `pf:<64자 해시>:<seq>:<combo>` 이므로 `'pf:'`(3) + 64 = 67, 68번째부터가
+   * `:<seq>:<combo>` 다 (P3.md 3.1 의 키 문법이 이 substr 의 근거다).
+   *
+   * `srs_state` 는 `spot_key` 가 PK 라서, 사용자가 마이그레이션 전에 **새** 차트로 같은
+   * 스팟을 이미 풀었으면 충돌한다. 그때는 `updated_at` 이 늦은 행을 남긴다 (동점이면 새 행).
+   */
+  applyAliases(aliases: readonly { from: string; to: string }[], now: number): AliasApplyResult[] {
+    const out: AliasApplyResult[] = [];
+    this.#db.exec('BEGIN IMMEDIATE');
+    try {
+      const known = new Set(
+        (this.#db.prepare('SELECT from_hash FROM hash_alias').all() as unknown as { from_hash: string }[]).map(
+          (r) => r.from_hash,
+        ),
+      );
+      for (const alias of aliases) {
+        if (known.has(alias.from)) {
+          out.push({ from: alias.from, to: alias.to, attempts: 0, srs: 0, srsConflicts: 0, sessions: 0, alreadyApplied: true });
+          continue;
+        }
+        const attempts = Number(
+          this.#db
+            .prepare(
+              "UPDATE attempt SET content_hash = :to, spot_key = 'pf:' || :to || substr(spot_key, 68) " +
+                'WHERE content_hash = :from',
+            )
+            .run({ from: alias.from, to: alias.to }).changes,
+        );
+        // 1) 새 해시 쪽 행이 더 오래됐으면 그 행을 지운다 (옛 행이 이긴다).
+        const droppedNew = Number(
+          this.#db
+            .prepare(
+              'DELETE FROM srs_state WHERE spot_key IN (' +
+                "  SELECT t.spot_key FROM srs_state t JOIN srs_state s ON t.spot_key = 'pf:' || :to || substr(s.spot_key, 68)" +
+                "   WHERE s.spot_key LIKE 'pf:' || :from || ':%' AND s.updated_at > t.updated_at)",
+            )
+            .run({ from: alias.from, to: alias.to }).changes,
+        );
+        // 2) 남은 충돌(새 행이 같거나 더 최신)은 옛 행을 버린다.
+        const droppedOld = Number(
+          this.#db
+            .prepare(
+              "DELETE FROM srs_state WHERE spot_key LIKE 'pf:' || :from || ':%' AND EXISTS (" +
+                "  SELECT 1 FROM srs_state t WHERE t.spot_key = 'pf:' || :to || substr(srs_state.spot_key, 68))",
+            )
+            .run({ from: alias.from, to: alias.to }).changes,
+        );
+        const srs = Number(
+          this.#db
+            .prepare(
+              "UPDATE srs_state SET spot_key = 'pf:' || :to || substr(spot_key, 68) " +
+                "WHERE spot_key LIKE 'pf:' || :from || ':%'",
+            )
+            .run({ from: alias.from, to: alias.to }).changes,
+        );
+        // 세션 필터는 JSON 문자열이다. 64자 hex 는 다른 값의 부분 문자열이 될 수 없으므로
+        // 통째 치환이 안전하다 (JSON 을 파싱해 다시 쓰면 키 순서가 바뀐다).
+        const sessionFilters = Number(
+          this.#db
+            .prepare('UPDATE trainer_session SET filter = replace(filter, :from, :to) WHERE instr(filter, :from) > 0')
+            .run({ from: alias.from, to: alias.to }).changes,
+        );
+        const sessionPending = Number(
+          this.#db
+            .prepare(
+              "UPDATE trainer_session SET pending_key = 'pf:' || :to || substr(pending_key, 68) " +
+                "WHERE pending_key LIKE 'pf:' || :from || ':%'",
+            )
+            .run({ from: alias.from, to: alias.to }).changes,
+        );
+        this.#db
+          .prepare('INSERT INTO hash_alias (from_hash, to_hash, applied_at) VALUES (?,?,?)')
+          .run(alias.from, alias.to, now);
+        out.push({
+          from: alias.from,
+          to: alias.to,
+          attempts,
+          srs,
+          srsConflicts: droppedNew + droppedOld,
+          sessions: sessionFilters + sessionPending,
+          alreadyApplied: false,
+        });
+      }
+      this.#db.exec('COMMIT');
+    } catch (e) {
+      this.#db.exec('ROLLBACK');
+      throw e;
+    }
+    return out;
+  }
+
+  /**
+   * WAL 을 본체에 합친다 (백업 전에 부른다 — `trainer.db` 한 파일만 복사해도 완전하도록).
+   * `:memory:` 나 WAL 이 없는 DB 에서는 아무 일도 하지 않는다.
+   */
+  checkpoint(): void {
+    this.#db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
+  }
+
+  /** 적용된 별칭 목록 (진단·멱등 확인용) */
+  listAliases(): { from: string; to: string; appliedAt: number }[] {
+    const rows = this.#db
+      .prepare('SELECT from_hash, to_hash, applied_at FROM hash_alias ORDER BY from_hash') 
+      .all() as unknown as { from_hash: string; to_hash: string; applied_at: number }[];
+    return rows.map((r) => ({ from: r.from_hash, to: r.to_hash, appliedAt: r.applied_at }));
+  }
+
+  /** `content_hash` 별 attempt 수 (마이그레이션 전후 확인 · 서버 기동 힌트) */
+  attemptHashCounts(): Map<string, number> {
+    const rows = this.#db.prepare('SELECT content_hash, COUNT(*) AS n FROM attempt GROUP BY content_hash').all() as unknown as {
+      content_hash: string;
+      n: number;
+    }[];
+    return new Map(rows.map((r) => [r.content_hash, r.n]));
   }
 
   close(): void {

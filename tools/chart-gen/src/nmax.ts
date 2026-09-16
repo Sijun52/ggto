@@ -14,19 +14,27 @@ import { solveNmax, type NmaxResult, type SolveOptions } from './solveNmax.js';
 
 export interface NmaxInputs {
   equity: EquityTable;
-  equity3: Equity3;
+  equity3: Equity3 | null;
   tables: NmaxTables;
 }
 
-export function loadInputs(equityPath: string, equity3BinPath: string, equity3MetaPath: string): NmaxInputs {
+/**
+ * 표를 읽는다. `equity3BinPath` 가 null 이면 **2-max 전용** 입력이다 (n≥3 솔브는
+ * `resolveEquity3` 에서 throw 한다) — `npm run seed` 가 3-way 표를 읽지 않고 45개
+ * 2-max 차트만 만들 수 있게 한다.
+ */
+export function loadInputs(equityPath: string, equity3BinPath: string | null, equity3MetaPath: string | null): NmaxInputs {
   const equity = loadEquityTable(equityPath);
-  const equity3 = loadEquity3(equity3BinPath, equity3MetaPath);
+  const equity3 =
+    equity3BinPath === null || equity3MetaPath === null ? null : loadEquity3(equity3BinPath, equity3MetaPath);
   return { equity, equity3, tables: buildTables(equity, equity3) };
 }
 
 export interface SolvedGame {
   tree: PushFoldTree;
   spec: ReturnType<typeof gameSpec>;
+  /** 터미널 지불 (테스트가 같은 게임을 BR 로 다시 채점할 때 쓴다) */
+  payoffs: ReturnType<typeof terminalPayoffs>;
   solve: NmaxResult;
 }
 
@@ -42,7 +50,7 @@ export function solveGame(
   const spec = gameSpec(n, antePreset, stack);
   const payoffs = terminalPayoffs(tree, spec);
   const solve = solveNmax(tree, spec, tables, payoffs, opts);
-  return { tree, spec, solve };
+  return { tree, spec, payoffs, solve };
 }
 
 /** 1326 가중 비폴드 집계 % (P7.md 5.2 (c) · 5.4 의 단조성 게이트가 쓴다) */

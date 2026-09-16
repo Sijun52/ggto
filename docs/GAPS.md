@@ -29,12 +29,14 @@
 | **스키마** | ✅ 이미 됨 | `chart_set.game_type CHECK IN ('cash','mtt','sng')`, `ante`, `rake`, `positions`, `blinds` 컬럼이 P2 부터 있다 |
 | **프리플랍 상태 기계** | ✅ 이미 됨 | `@ggto/core` 의 `preflopState` 는 임의 `positions` 배열 · 임의 블라인드 · 앤티를 받는다. 6-max 도 9-max 도 표현된다 |
 | **트레이너 카테고리** | ✅ 자동 | `categoryOfState` 가 상태 기계에서 유도한다 — `open`/`vs_limp`/`vs_jam`. 차트가 풍부해지면 카테고리도 따라 는다 |
-| **차트 생성기** | ❌ **여기가 병목** | `tools/chart-gen/src/chart.ts:72` 에 `positions: ['SB','BB']` **하드코딩**. HU 푸시/폴드만 만든다 |
+| **차트 생성기** | ✅ P7 에서 해소 | `tools/chart-gen/src/main.ts` 가 `tablePositions(n)` 로 2~9-max × 앤티 3종 × 스택 15단을 푼다 (`pf-nmax-v1`). 옛 `chart.ts`(HU 전용)는 5.2 회귀 기준으로만 남는다 |
 | **Range 페이지** | ❌ 텍스트 파서 뷰어 | 자유 입력 → 169 격자. "BTN 오픈 레인지" 를 고르는 개념이 없다 |
 | **게임 타입 UI** | ❌ 없음 | 데이터엔 `game_type` 이 있는데 화면에 필터·구분이 없다 |
 
 **결론**: 데이터 모델과 도메인 로직은 이미 6-max·MTT 를 표현할 수 있다.
-차트가 HU 푸시/폴드 6개뿐이라 그 위의 모든 기능이 거기 갇혀 있다.
+차트가 HU 푸시/폴드 6개뿐이라 그 위의 모든 기능이 거기 갇혀 있었다 — **P7 이 그 병목을 푼다**
+(생성기·에퀴티 표·은퇴/마이그레이션). 남은 것은 UI(P8): 360 셋을 고를 수 있는 필터와
+`limitations` 표기다.
 
 ---
 

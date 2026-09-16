@@ -9,6 +9,7 @@
 
 import { useEffect, useMemo } from 'react';
 import type { HandClassIndex } from '@ggto/core';
+import type { ChartSetDto } from '@ggto/protocol';
 import { useChart, useChartNode, useChartRange, useChartRanges, useChartSets } from '../api/queries';
 import { ChartNodeView } from '../components/ChartNodeView';
 import type { PositionReach } from '../components/ReachPanel';
@@ -36,6 +37,20 @@ function readUrl(): { set: number | null; seq: string } {
   const rawSet = urlParam(window.location.search, 'set');
   const n = rawSet === null ? Number.NaN : Number(rawSet);
   return { set: Number.isInteger(n) && n > 0 ? n : null, seq: urlParam(window.location.search, 'seq') ?? '' };
+}
+
+/** 앤티 정렬 순서: 없음 → BB 앤티 → 전원 앤티 (P7.md 8절, 프리셋 none/bba1/pp 와 같은 순서) */
+const ANTE_ORDER: Record<string, number> = { none: 0, bb_ante: 1, per_player: 2 };
+
+/** 셋 목록 정렬: (테이블 사이즈, 앤티, 스택, 이름). 360개가 되어도 찾을 수 있게 한다. */
+export function compareSets(a: ChartSetDto, b: ChartSetDto): number {
+  const seats = a.config.positions.length - b.config.positions.length;
+  if (seats !== 0) return seats;
+  const ante = (ANTE_ORDER[a.config.ante.mode] ?? 9) - (ANTE_ORDER[b.config.ante.mode] ?? 9);
+  if (ante !== 0) return ante;
+  const stack = a.config.stack - b.config.stack;
+  if (stack !== 0) return stack;
+  return a.name.localeCompare(b.name);
 }
 
 function countPositive(xs: Float32Array): number {
@@ -66,8 +81,11 @@ export function ChartsPage(): React.JSX.Element {
   const setHoveredClass = useUiStore((s) => s.setHoveredClass);
 
   const sets = useChartSets();
+  // P7.md 8절: 사다리가 360개가 되면 임포트 순서(id)로는 못 찾는다.
+  // (테이블 사이즈, 앤티 none→bb_ante→per_player, 스택) 로 정렬한다 — 메타에 다 있다.
+  const sortedSets = useMemo(() => [...(sets.data ?? [])].sort(compareSets), [sets.data]);
   // URL 이 셋을 지정했으면 그것, 아니면 목록의 첫 번째. 사용자가 고르면 store 가 이긴다.
-  const activeId = chartSetId ?? initial.set ?? sets.data?.[0]?.id ?? null;
+  const activeId = chartSetId ?? initial.set ?? sortedSets[0]?.id ?? null;
   const chart = useChart(activeId);
   const node = useChartNode(activeId, seq);
 
@@ -146,7 +164,7 @@ export function ChartsPage(): React.JSX.Element {
             setChartSetId(Number(e.target.value));
           }}
         >
-          {(sets.data ?? []).map((s) => (
+          {sortedSets.map((s) => (
             <option key={s.id} value={String(s.id)}>
               {s.name}
             </option>

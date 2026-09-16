@@ -25,10 +25,21 @@ git clone https://github.com/Sijun52/ggto.git
 cd ggto
 node --version  # 24.x 여야 한다
 npm install     # prepare 훅이 core/protocol 을 자동 빌드한다
-npm run seed    # 시드 차트 생성 + 임포트 (최초 1회, ~6초)
+npm run seed    # 2-max(HU) 푸시/폴드 45 차트 생성 + 임포트 (최초 1회, 1분 안)
 npm run ci      # 전부 통과하면 환경이 정상이다
 npm run build && npm start   # http://localhost:7777
 ```
+
+**전체 차트 사다리**(2~9-max × 앤티 3종 × 스택 15단 = 360 차트)는 오프라인 작업이다:
+
+```bash
+npm run gen:charts   # 6코어에서 수 시간. --resume 이 기본이라 중단해도 이어서 돈다
+```
+
+`seed` 는 2-max 45장만 만든다 (`ci` 관례인 "1분 안"). 3~9-max 는 3-way 에퀴티 표
+(`tools/chart-gen/data/equity169-3way.bin`, 커밋돼 있다)를 읽고 차트당 수 초~수 분이 걸린다.
+옛 HU 시드 6개를 쓰던 트레이너 기록이 있으면 서버 기동 로그가 `npm run trainer:migrate` 를
+안내한다 (기록은 명시적으로만 옮긴다 — D16·D35).
 
 `npm run ci` 가 exit 0 이면 끝이다. 실패하면 아래 3절을 보라.
 
@@ -46,7 +57,7 @@ npm run build && npm start   # http://localhost:7777
 |---|---|---|
 | `node_modules/` | 의존성 | `npm install` |
 | `*/dist/` | 빌드 산출물 | `npm run build` (또는 `prepare`/`pretest` 훅이 자동) |
-| `/data/` | `ggto.db`, `trainer.db`, 생성된 차트 JSON | `npm run seed` |
+| `/data/` | `ggto.db`, `trainer.db`, 생성된 차트 JSON | `npm run seed` (2-max) · `npm run gen:charts` (전체 사다리) |
 | `*.tsbuildinfo` | tsc 증분 캐시 | 자동 |
 
 **중요**: `.gitignore` 의 데이터 패턴은 `/data/` 다 — 맨 앞 슬래시가 없으면 `tools/chart-gen/data/equity169.json`(커밋되어야 하는 250KB 전수 에퀴티 표)까지 무시된다. 실제로 한 번 발생했던 버그다. 패턴을 바꾸지 마라.

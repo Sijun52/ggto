@@ -10,7 +10,8 @@
     "build": "tsc -p tsconfig.build.json",
     "gen:equity": "node dist/genEquity.js",
     "gen:equity3": "node dist/genEquity3.js",
-    "bench": "node bench/equity3.mjs"
+    "bench": "node bench/equity3.mjs",
+    "test:slow": "vitest run --config vitest.slow.config.ts"
   },
   "dependencies": {
     "@ggto/core": "*",

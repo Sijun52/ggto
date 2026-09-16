@@ -21,7 +21,7 @@ import { evaluateMasks } from '@ggto/core/internal';
 import { COMBO_KEYS } from '@ggto/preflop';
 import { fnv1a32 } from './equityTable.js';
 import type { GameSpec } from './payoff.js';
-import { N, REMAINING_PAIRS, type NmaxTables } from './tables.js';
+import { N, REMAINING_PAIRS, resolveEquity3, type NmaxTables } from './tables.js';
 import type { PushFoldTree } from './tree.js';
 
 export const DEFAULT_TRUNCATION_SAMPLES = 2000;
@@ -93,6 +93,8 @@ export function truncationGain(
   if (tree.truncated.length === 0) return { totalBb: 0, byPlayerBb, byNode, samples };
 
   const { w2, rowTotal2, classProb } = tables;
+  // 절단 노드가 있다는 것은 n ≥ 4 라는 뜻이다 — 3-way 표 없이는 도달 확률을 못 만든다.
+  const { w3 } = resolveEquity3(tables, tree, `${chartId} truncation gain`);
 
   // 폴더의 비폴드 확률 (조건 (h) 와 (h, 잼 핸드)) — 도달 확률 가중치에만 쓴다.
   const nfVec: Float64Array[] = tree.nodes.map((_unused, k) => {
@@ -118,7 +120,7 @@ export function truncationGain(
         if (pairW === 0) continue;
         const base = (hBase + y) * N;
         let acc = 0;
-        for (let c = 0; c < N; c++) acc += (sigma[c] as number) * (tables.w3[base + c] as number);
+        for (let c = 0; c < N; c++) acc += (sigma[c] as number) * (w3[base + c] as number);
         out[hBase + y] = acc / (pairW * REMAINING_PAIRS);
       }
     }

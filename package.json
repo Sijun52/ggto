@@ -9,7 +9,7 @@
   ],
   "scripts": {
     "build:libs": "npm run build -w @ggto/core -w @ggto/protocol -w @ggto/preflop -w @ggto/trainer -w @ggto/solver",
-    "build:tools": "npm run build -w @ggto/chart-gen -w @ggto/chart-import",
+    "build:tools": "npm run build -w @ggto/chart-gen -w @ggto/chart-import -w @ggto/trainer-migrate",
     "typecheck": "npm run build:libs && npm run typecheck --workspaces --if-present",
     "prepare": "npm run build:libs",
     "pretest": "npm run build:libs && npm run build:tools",
@@ -22,7 +22,7 @@
     "start:lan": "node scripts/start-lan.mjs",
     "smoke": "node packages/server/scripts/smoke.mjs",
     "preseed": "npm run build:libs && npm run build:tools",
-    "seed": "node tools/chart-gen/dist/main.js --out data/charts && node tools/chart-import/dist/main.js --db data/ggto.db data/charts",
+    "seed": "node tools/chart-gen/dist/main.js --sizes 2 --out data/charts && node tools/chart-import/dist/main.js --db data/ggto.db data/charts --aliases data/charts/aliases.json",
     "import": "node tools/chart-import/dist/main.js",
     "gen:equity": "npm run build:libs && npm run gen:equity -w @ggto/chart-gen",
     "predev:server": "npm run build:libs",
@@ -36,7 +36,12 @@
     "test:solver": "node scripts/test-solver.mjs",
     "ci:solver": "npm run build:solver && npm run test:solver && npm run bench:solver",
     "solve": "node tools/solve/main.mjs",
-    "bench:solver": "node packages/solver/bench/integration.mjs"
+    "bench:solver": "node packages/solver/bench/integration.mjs",
+    "pregen:charts": "npm run build:libs && npm run build:tools",
+    "gen:charts": "node tools/chart-gen/dist/main.js --resume --out data/charts && node tools/chart-import/dist/main.js --db data/ggto.db data/charts --aliases data/charts/aliases.json",
+    "gen:equity3": "npm run build:libs && npm run build:tools && npm run gen:equity3 -w @ggto/chart-gen",
+    "pretrainer:migrate": "npm run build:libs && npm run build:tools",
+    "trainer:migrate": "node tools/trainer-migrate/dist/main.js"
   },
   "engines": {
     "node": ">=24"

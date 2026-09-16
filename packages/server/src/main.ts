@@ -11,7 +11,7 @@
  */
 
 import { serve } from '@hono/node-server';
-import { openRepository } from '@ggto/preflop';
+import { ALIAS_FILE_NAME, openRepository, parseAliasFile } from '@ggto/preflop';
 import { openTrainer } from '@ggto/trainer';
 import {
   DEFAULT_CACHE_BYTES,
@@ -21,7 +21,7 @@ import {
   SolveCache,
   resolveBin,
 } from '@ggto/solver';
-import { existsSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { networkInterfaces } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -95,6 +95,28 @@ const repo = openRepository(join(dataDir, 'ggto.db'));
 // 기록은 `ggto.db` 와 **별도 파일**이다 (D16): `ggto.db` 는 `npm run seed` 로 재생성되는
 // 산출물이고 트레이너 기록은 지워지면 안 되는 사용자 데이터라 수명이 다르다.
 const trainer = openTrainer({ chartRepo: repo, dbPath: join(dataDir, 'trainer.db') });
+
+/**
+ * 은퇴한 차트(P7.md 7.1)를 참조하는 기록이 있으면 **알려만 준다**. 서버는 기록을 고치지
+ * 않는다 (D16: 사용자 데이터는 명시적 `npm run trainer:migrate` 로만 옮긴다).
+ */
+function retiredRecordHint(): string | null {
+  const path = join(dataDir, 'charts', ALIAS_FILE_NAME);
+  if (!existsSync(path)) return null;
+  let aliases;
+  try {
+    aliases = parseAliasFile(readFileSync(path, 'utf8'), path).aliases;
+  } catch (e) {
+    // 별칭 파일이 망가진 것은 기동을 막을 이유가 아니다 — 힌트만 포기한다.
+    return `[ggto] ${path} 를 읽지 못했다: ${e instanceof Error ? e.message : String(e)}`;
+  }
+  const { attempts, hashes } = trainer.retiredAttempts(aliases);
+  if (attempts === 0) return null;
+  return (
+    `[ggto] attempt ${String(attempts)}건이 은퇴한 차트(${hashes.map((h) => h.slice(0, 8)).join(', ')})를 참조합니다 — ` +
+    'npm run trainer:migrate'
+  );
+}
 
 /**
  * 솔버 (P4 / D24). 바이너리가 없으면 `/api/solve*` 만 503 이고 나머지는 그대로다 —
@@ -177,6 +199,8 @@ serve({ fetch: app.fetch, port: resolvePort(), hostname: host }, (info) => {
   console.log(`[ggto] web dist: ${webDist ?? '(not built — run npm run build)'}`);
   console.log(`[ggto] data dir: ${dataDir}`);
   console.log(`[ggto] trainer db: ${join(dataDir, 'trainer.db')}`);
+  const hint = retiredRecordHint();
+  if (hint !== null) console.log(hint);
   console.log(
     solve === null
       ? '[ggto] solver: (not built — npm run build:solver). /api/solve is 503, everything else works'

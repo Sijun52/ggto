@@ -144,9 +144,12 @@ export function nmaxChart(input: NmaxChartInput): NmaxChartResult {
         iterations: solve.iterations,
         equityTable: tables.equityRef,
         equitySamples: null,
-        equityTable3: tables.equity3Ref,
-        equity3Samples: tables.equity3Samples,
+        // 2-max 는 3-way 쇼다운이 없어 표가 계산에 **들어가지 않는다**. 표가 실렸는지에
+        // 따라 해시가 흔들리지 않도록 null 을 적는다 (P7.md 6절의 필드는 유지).
+        equityTable3: n >= 3 ? tables.equity3Ref : null,
+        equity3Samples: n >= 3 ? tables.equity3Samples : null,
         epsilonBb: sig(solve.epsilonBb, 4),
+        mixedLossBb: sig(solve.mixedLossBb, 4),
         nashConvBb: sig(solve.nashConvBb, 4),
         exploitabilityBb: sig(solve.exploitabilityBb, 4),
         gainsBb: byPosition(spec, solve.gainsBb, 4),

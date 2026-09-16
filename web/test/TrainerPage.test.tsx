@@ -5,7 +5,7 @@
  * strategy/ev/reach 가 없고 `/api/charts/*//*node` 도 부르지 않는다. 아래 테스트는
  * fetch 로 오간 URL 목록과 응답 JSON 문자열을 직접 검사해 그것을 고정한다.
  *
- * 응답 본문은 **7.1 생성기 출력**(fixtures/hu-pushfold-10bb.json = 실제 `npm run seed`
+ * 응답 본문은 **7.1 생성기 출력**(fixtures/pf-2max-none-10bb.json = 실제 `npm run seed`
  * 산출물)을 core 로 1326 전개해 만든다. 손으로 쓴 전략/EV 배열은 쓰지 않는다.
  */
 
@@ -44,7 +44,7 @@ interface Fixture {
 }
 
 const CHART = JSON.parse(
-  readFileSync(resolve(import.meta.dirname, 'fixtures/hu-pushfold-10bb.json'), 'utf8'),
+  readFileSync(resolve(import.meta.dirname, 'fixtures/pf-2max-none-10bb.json'), 'utf8'),
 ) as Fixture;
 
 const ROOT = CHART.nodes.find((n) => n.seq === '') as FixtureNode;

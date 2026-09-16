@@ -12,3 +12,6 @@ bash.exe.stackdump
 
 # Rust 빌드 산출물 (P4)
 /solver/ggto-solver-cli/target/
+
+# gen:equity3 워커 체크포인트 (중간 산출물, 수 GB 아님). 완성본 equity169-3way.bin 은 커밋한다
+/tools/chart-gen/data/*.part

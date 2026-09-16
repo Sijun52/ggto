@@ -10,7 +10,18 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { CATEGORIES, VERDICTS } from './types.js';
 
-export const TRAINER_SCHEMA_VERSION = 1;
+export const TRAINER_SCHEMA_VERSION = 2;
+
+/**
+ * v2 (P7.md 7.2, D35): 은퇴한 차트의 `content_hash` → 새 해시. `npm run trainer:migrate` 가
+ * 기록을 옮기고 여기에 한 줄을 남긴다. 이 표가 **멱등성의 근거**다 — 두 번째 실행은
+ * 이미 적힌 별칭을 건너뛰므로 전부 0 행이 된다.
+ */
+export const HASH_ALIAS_SQL = `CREATE TABLE hash_alias (
+  from_hash   TEXT PRIMARY KEY,
+  to_hash     TEXT NOT NULL,
+  applied_at  INTEGER NOT NULL
+) STRICT;`;
 
 const CATEGORY_LIST = CATEGORIES.map((c) => `'${c}'`).join(',');
 const VERDICT_LIST = VERDICTS.map((v) => `'${v}'`).join(',');
@@ -70,6 +81,8 @@ CREATE TABLE srs_state (
   updated_at    INTEGER NOT NULL
 ) STRICT;
 CREATE INDEX idx_srs_due ON srs_state(due_at);
+
+${HASH_ALIAS_SQL}
 `;
 
 export class SchemaVersionError extends Error {
@@ -86,11 +99,22 @@ function userVersion(db: DatabaseSync): number {
   return typeof row?.user_version === 'number' ? row.user_version : 0;
 }
 
-/** 0 → DDL, 현재 버전 → 통과, 그 외 → throw (P2 4.1 과 같은 규칙). */
+/**
+ * 0 → DDL 전체, 1 → 2 (`hash_alias` 추가), 현재 버전 → 통과, 그 외 → throw.
+ *
+ * 1→2 는 **표 추가뿐**이라 기존 행을 건드리지 않는다 (사용자 데이터는 D16). 그래서
+ * 서버가 v1 파일을 열기만 해도 안전하게 올라간다 — 기록 이전(`trainer:migrate`)은
+ * 그와 별개로 사용자가 명시적으로 돌리는 작업이다.
+ */
 export function migrate(db: DatabaseSync): void {
   const v = userVersion(db);
   if (v === TRAINER_SCHEMA_VERSION) return;
-  if (v !== 0) throw new SchemaVersionError(v);
-  db.exec(TRAINER_SCHEMA_SQL);
+  if (v === 0) {
+    db.exec(TRAINER_SCHEMA_SQL);
+  } else if (v === 1) {
+    db.exec(HASH_ALIAS_SQL);
+  } else {
+    throw new SchemaVersionError(v);
+  }
   db.exec(`PRAGMA user_version = ${String(TRAINER_SCHEMA_VERSION)}`);
 }
