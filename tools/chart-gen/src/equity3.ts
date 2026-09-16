@@ -24,8 +24,17 @@ export const RECORD_BYTES = 8;
 export const U16_SCALE = 65_535;
 /** i=j=k 의 대칭 지분. 3·21845 = 65535 이라 합 검사도 정확히 통과한다 */
 export const THIRD_U16 = 21_845;
-/** Σ_{ordered (i,j,k)} w3 = 1326·1225·1128 */
-export const ORDERED_W3_TOTAL = 1_832_455_600;
+/**
+ * Σ_{모든 순서쌍 (i,j,k)} w3(i,j,k) = C(52,2)·C(50,2)·C(48,2) = 1326·1225·1128.
+ *
+ * 근거: w3 은 "서로 겹치지 않는 콤보 3개를 **순서대로** 고르는 경우의 수" 이고, 그런
+ * 콤보 3쌍 하나하나는 정확히 하나의 순서 클래스쌍 (i,j,k) 에 속한다 (분할). 따라서 합은
+ * 클래스와 무관하게 52장에서 2장씩 겹치지 않게 세 번 뽑는 수와 같다.
+ *
+ * **손으로 적지 않는다**: P7.md 초안이 같은 곱을 1,832,455,600 으로 잘못 적었고 그 값이
+ * 여기 하드코딩돼 정상 표를 거부했다. 곱으로 두면 산술 오타가 불가능하다.
+ */
+export const ORDERED_W3_TOTAL = 1326 * 1225 * 1128;
 /** 클래스당 콤보는 최대 12개 → w3 ≤ 12³ */
 export const MAX_W3 = 1728;
 export const EQUITY3_SEED_RULE = 'fnv1a32("<classI>|<classJ>|<classK>"), i <= j <= k in CLASS_KEYS order';

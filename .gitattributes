@@ -16,3 +16,7 @@
 *.ico binary
 *.zst binary
 *.db binary
+
+# 3-way 에퀴티 표 (P7 3절). text=auto 의 이진 추정에 맡기지 않는다 — 한 바이트만
+# 바뀌어도 로더의 sha256 검사가 새 클론에서만 터진다.
+*.bin binary

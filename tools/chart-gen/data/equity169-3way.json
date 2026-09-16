@@ -1,0 +1,13 @@
+{
+  "format": "ggto-equity169-3way",
+  "version": 1,
+  "samples": 100000,
+  "seedRule": "fnv1a32(\"<classI>|<classJ>|<classK>\"), i <= j <= k in CLASS_KEYS order",
+  "samplerVersion": 1,
+  "coreVersion": "@ggto/core@0.0.0",
+  "tripleCount": 818805,
+  "encoding": "u16le x4 [w3, share_i, share_j, share_k], multiset colex index",
+  "sha256": "9da42350641128cdbb80a5af36e24d5e741657e9681c6aebf79f62c3a4b449ce",
+  "elapsedSec": 4330.2,
+  "workers": 6
+}
