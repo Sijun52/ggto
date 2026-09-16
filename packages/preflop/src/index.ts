@@ -33,3 +33,4 @@ export { decodeRows, encodeRows } from './blob.js';
 export { SCHEMA_SQL, SCHEMA_VERSION, SchemaVersionError, migrate } from './schema.js';
 export { openRepository } from './repository.js';
 export { CLASS_KEYS, COMBO_KEYS, keysFor } from './keys.js';
+export { MAX_TABLE_SIZE, MIN_TABLE_SIZE, tablePositions } from './positions.js';

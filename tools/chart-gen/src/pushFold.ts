@@ -115,7 +115,7 @@ function bbDiff(m: Matrices, jam: Float64Array, out: Float64Array): void {
 }
 
 /** 2액션 정보집합의 regret matching+ (음의 후회는 0 으로 눌러 둔다) */
-function updateRegrets(diff: Float64Array, strat: Float64Array, rPos: Float64Array, rNeg: Float64Array): void {
+export function updateRegrets(diff: Float64Array, strat: Float64Array, rPos: Float64Array, rNeg: Float64Array): void {
   for (let i = 0; i < CLASS_COUNT; i++) {
     const d = diff[i] as number;
     const p = strat[i] as number;

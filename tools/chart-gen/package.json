@@ -8,7 +8,9 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
     "build": "tsc -p tsconfig.build.json",
-    "gen:equity": "node dist/genEquity.js"
+    "gen:equity": "node dist/genEquity.js",
+    "gen:equity3": "node dist/genEquity3.js",
+    "bench": "node bench/equity3.mjs"
   },
   "dependencies": {
     "@ggto/core": "*",

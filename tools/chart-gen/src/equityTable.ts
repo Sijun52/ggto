@@ -115,15 +115,19 @@ export function loadEquityTable(path: string): EquityTable {
   return raw;
 }
 
-/** 쌍에서 결정적으로 시드를 만든다 (FNV-1a 32bit). 같은 쌍은 언제 어디서 돌려도 같은 값. */
-export function pairSeed(a: string, b: string): number {
+/** FNV-1a 32bit. 이름 문자열에서 결정적으로 시드를 만드는 단 하나의 규칙이다. */
+export function fnv1a32(s: string): number {
   let h = 0x811c9dc5;
-  const s = `${a}|${b}`;
   for (let i = 0; i < s.length; i++) {
     h ^= s.charCodeAt(i);
     h = Math.imul(h, 0x01000193) >>> 0;
   }
   return h >>> 0;
+}
+
+/** 쌍에서 결정적으로 시드를 만든다. 같은 쌍은 언제 어디서 돌려도 같은 값. */
+export function pairSeed(a: string, b: string): number {
+  return fnv1a32(`${a}|${b}`);
 }
 
 export const SEED_RULE = 'fnv1a32("<classA>|<classB>"), A = row class, B = column class, i < j only';
