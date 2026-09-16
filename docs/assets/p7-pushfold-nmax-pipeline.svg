@@ -1,0 +1,107 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 560" width="960" height="560" font-family="ui-sans-serif, -apple-system, 'Segoe UI', 'Malgun Gothic', 'Apple SD Gothic Neo', 'Noto Sans KR', Roboto, Arial, sans-serif">
+  <style>
+    .t   { font-size: 12px; fill: #0f172a; }
+    .s   { font-size: 10.5px; fill: #475569; }
+    .h   { font-size: 14px; font-weight: 700; fill: #0f172a; }
+    .w   { font-size: 11px; fill: #f8fafc; font-weight: 700; }
+    .ws  { font-size: 10px; fill: #e2e8f0; }
+    .box   { fill: #f8fafc; stroke: #334155; stroke-width: 1.2; }
+    .dark  { fill: #0f172a; stroke: #334155; stroke-width: 1.2; }
+    .gate  { fill: #fef3c7; stroke: #b45309; stroke-width: 1.2; }
+    .data  { fill: #e0f2fe; stroke: #0369a1; stroke-width: 1.2; }
+    .out   { fill: #dcfce7; stroke: #15803d; stroke-width: 1.2; }
+    .note  { font-size: 11px; fill: #334155; }
+    .arrow { stroke: #64748b; stroke-width: 1.2; fill: none; marker-end: url(#ar); }
+  </style>
+  <defs>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#64748b"/>
+    </marker>
+  </defs>
+
+  <text x="20" y="24" class="h">P7 — MTT 푸시/폴드 생성 파이프라인 (2~9-max × 앤티 3종 × 스택 15단, 모델 pf-nmax-v1)</text>
+
+  <!-- inputs -->
+  <rect x="20" y="50" width="200" height="64" rx="6" class="data"/>
+  <text x="30" y="70" class="t">equity169.json (2-way, 전수)</text>
+  <text x="30" y="86" class="s">169×169, 커밋됨 (P2)</text>
+  <text x="30" y="100" class="s">w2(h,y) = 겹치지 않는 순서쌍 수</text>
+
+  <rect x="20" y="126" width="200" height="78" rx="6" class="data"/>
+  <text x="30" y="146" class="t">equity169-3way.bin (3-way, MC)</text>
+  <text x="30" y="162" class="s">818,805 3중집합 × [w3, s_i, s_j, s_k] u16</text>
+  <text x="30" y="176" class="s">S = 100,000 / 트리플, 시드 = fnv1a32(이름)</text>
+  <text x="30" y="190" class="s">6.55MB, 6 워커 ≈ 2.5h, 1회 생성 후 커밋</text>
+
+  <rect x="20" y="216" width="200" height="64" rx="6" class="data"/>
+  <text x="30" y="236" class="t">설정 격자</text>
+  <text x="30" y="252" class="s">n ∈ 2..9 · 앤티 none / bba1 / pp0.125</text>
+  <text x="30" y="266" class="s">스택 3..15, 17, 20 (15단) → 360 차트</text>
+
+  <!-- generator -->
+  <rect x="270" y="50" width="330" height="230" rx="8" class="dark"/>
+  <text x="282" y="72" class="w">tools/chart-gen (169 로 푼다 — 생성기 안에서만, D4)</text>
+
+  <rect x="282" y="84" width="306" height="34" rx="4" class="box"/>
+  <text x="290" y="98" class="t">tree.ts — 결정 노드·터미널 열거, capCallers = 2</text>
+  <text x="290" y="112" class="s">9-max: 노드 128, 2-way 36, 3-way 84, 절단 결정 126</text>
+
+  <rect x="282" y="124" width="306" height="48" rx="4" class="box"/>
+  <text x="290" y="138" class="t">payoff.ts — u_i(z) = share·Pot − c_i, Σ_i u_i = 0</text>
+  <text x="290" y="152" class="s">히어로 시점 조건부 확률: 활성 상대 p2/p3(카드 제거),</text>
+  <text x="290" y="166" class="s">폴더 = 1 − 비폴드 확률 | (h) 또는 (h, y)  (1.4)</text>
+
+  <rect x="282" y="178" width="306" height="48" rx="4" class="box"/>
+  <text x="290" y="192" class="t">solveNmax.ts — CFR+ (RM+, 선형 평균, 교대), 희소 축약</text>
+  <text x="290" y="206" class="s">50 반복마다 bestResponse.ts (별도 코드 경로) → ε</text>
+  <text x="290" y="220" class="s">정지: ε &lt; 1e-5 또는 4,000 반복</text>
+
+  <rect x="282" y="232" width="306" height="40" rx="4" class="box"/>
+  <text x="290" y="246" class="t">truncation.ts — 절단 결정 노드의 4-way 콜 BR 이득 (MC)</text>
+  <text x="290" y="260" class="s">truncationGainBb = Σ_x Σ_h p(h) P(x|h) max(0, EV_call4)</text>
+
+  <!-- gates -->
+  <rect x="650" y="50" width="290" height="230" rx="8" class="gate"/>
+  <text x="662" y="72" class="t" font-weight="700">게이트 (하나라도 실패 → 파일을 쓰지 않는다)</text>
+  <text x="662" y="94" class="t">ε = max_i gain_i &lt; 0.005 bb  (1.6)</text>
+  <text x="662" y="110" class="s">nashConv = Σ gain_i, exploitability = nashConv/n 기록</text>
+  <text x="662" y="132" class="t">truncationGainBb ≤ 0.02 bb  (5.5)</text>
+  <text x="662" y="154" class="t">3-way 표: 7개 전수 정답과 ±0.5%p  (3.4)</text>
+  <text x="662" y="176" class="t">HU 회귀: n=2/none ≡ pushFold.ts  (5.2)</text>
+  <text x="662" y="198" class="t">서브게임: F^(n−2) 노드 ≡ 2-max  (5.3 hard)</text>
+  <text x="662" y="220" class="t">단조성: 포지션·스택·앤티  (5.4)</text>
+  <text x="662" y="242" class="t">Σ_i u_i(z) = 0, massDefect 기록  (5.1)</text>
+  <text x="662" y="264" class="s">n≥3 CFR 수렴 무보장 → 게이트는 측정이다</text>
+
+  <!-- outputs -->
+  <rect x="270" y="310" width="330" height="92" rx="8" class="out"/>
+  <text x="282" y="330" class="t" font-weight="700">ggto-json v1 (형식 불변) — pf-9max-bba1-10bb.json</text>
+  <text x="282" y="348" class="s">gameType 'mtt', resolution '169', evBasis stack_delta_from_node</text>
+  <text x="282" y="362" class="s">source.params: modelId, capCallers, ε, iterations, 표 sha256,</text>
+  <text x="282" y="376" class="s">truncationGainBb, massDefect, gameValueBb, limitations[5]</text>
+  <text x="282" y="392" class="s">절단 라인(F-A-C-C…)은 노드 없음 → 임포터 경고, 뷰어 404</text>
+
+  <rect x="650" y="310" width="290" height="92" rx="8" class="out"/>
+  <text x="662" y="330" class="t" font-weight="700">data/charts/aliases.json (7절)</text>
+  <text x="662" y="348" class="s">옛 HU 6 해시 → 새 2-max/none 해시</text>
+  <text x="662" y="364" class="s">chart-import --aliases : 옛 셋 은퇴 (ggto.db)</text>
+  <text x="662" y="380" class="s">npm run trainer:migrate : attempt·srs·session 치환</text>
+  <text x="662" y="396" class="s">(백업 후, 명시적 명령 — seed 는 trainer.db 를 안 건드린다)</text>
+
+  <!-- downstream -->
+  <rect x="20" y="430" width="920" height="100" rx="8" class="box"/>
+  <text x="32" y="450" class="t" font-weight="700">하류 (변경 없음 또는 최소)</text>
+  <text x="32" y="470" class="t">chart-import (P2, 6.2 검증 그대로) → data/ggto.db (≈16,470 노드, ≤ 200MB) → /api/charts → 뷰어(포지션 탭 9개, flex-wrap) → 트레이너 풀(≤ 5s, +RSS ≤ 400MB)</text>
+  <text x="32" y="490" class="s">npm run seed = 2-max 45 차트 (1분 안) + 은퇴 · npm run gen:charts = 전체 사다리 (6 워커 ≤ 6h, --resume) · ci 는 둘 다 포함하지 않는다</text>
+  <text x="32" y="510" class="s">P8 이 스택·사이즈·앤티 필터, 포지션×상황 브라우저, limitations 표시를 만든다. P7 의 웹 변경은 셋 정렬 한 줄뿐이다.</text>
+
+  <!-- arrows -->
+  <path d="M220 82 L270 100" class="arrow"/>
+  <path d="M220 165 L270 160" class="arrow"/>
+  <path d="M220 248 L270 240" class="arrow"/>
+  <path d="M600 165 L650 165" class="arrow"/>
+  <path d="M795 280 L795 310" class="arrow"/>
+  <path d="M435 280 L435 310" class="arrow"/>
+  <path d="M435 402 L435 430" class="arrow"/>
+  <path d="M795 402 L795 430" class="arrow"/>
+</svg>

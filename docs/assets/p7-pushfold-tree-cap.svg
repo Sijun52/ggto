@@ -1,0 +1,111 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 560" width="960" height="560" font-family="ui-sans-serif, -apple-system, 'Segoe UI', 'Malgun Gothic', 'Apple SD Gothic Neo', 'Noto Sans KR', Roboto, Arial, sans-serif">
+  <style>
+    .t   { font-size: 12px; fill: #0f172a; }
+    .s   { font-size: 10.5px; fill: #475569; }
+    .h   { font-size: 14px; font-weight: 700; fill: #0f172a; }
+    .node  { fill: #f8fafc; stroke: #334155; stroke-width: 1.2; }
+    .term  { fill: #dcfce7; stroke: #15803d; stroke-width: 1.2; }
+    .term3 { fill: #fef9c3; stroke: #a16207; stroke-width: 1.2; }
+    .cut   { fill: #fee2e2; stroke: #b91c1c; stroke-width: 1.2; stroke-dasharray: 4 3; }
+    .note  { font-size: 11px; fill: #334155; }
+    .edge  { stroke: #64748b; stroke-width: 1.2; fill: none; marker-end: url(#ar); }
+    .lbl   { font-size: 10.5px; fill: #1e293b; font-weight: 700; }
+  </style>
+  <defs>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#64748b"/>
+    </marker>
+  </defs>
+
+  <text x="20" y="24" class="h">푸시/폴드 트리와 콜러 상한 (예: 4-max CO·BTN·SB·BB, capCallers = 2) — 각 플레이어는 한 번만 행동한다</text>
+
+  <!-- level 0: CO -->
+  <rect x="420" y="50" width="120" height="36" rx="6" class="node"/>
+  <text x="430" y="65" class="t">"" · CO 행동</text>
+  <text x="430" y="79" class="s">{F, A}</text>
+
+  <!-- CO F -> BTN open ; CO A -> BTN facing -->
+  <path d="M460 86 L300 130" class="edge"/>
+  <text x="365" y="104" class="lbl">F</text>
+  <path d="M500 86 L660 130" class="edge"/>
+  <text x="590" y="104" class="lbl">A</text>
+
+  <rect x="240" y="130" width="120" height="36" rx="6" class="node"/>
+  <text x="250" y="145" class="t">F · BTN 행동</text>
+  <text x="250" y="159" class="s">{F, A} — 3-max 루트와 동형 (none/bba1)</text>
+
+  <rect x="600" y="130" width="120" height="36" rx="6" class="node"/>
+  <text x="610" y="145" class="t">A · BTN 행동</text>
+  <text x="610" y="159" class="s">{F, C}</text>
+
+  <!-- from A: BTN F -> SB facing(A-F); BTN C -> SB facing (A-C) -->
+  <path d="M640 166 L560 210" class="edge"/>
+  <text x="590" y="186" class="lbl">F</text>
+  <path d="M680 166 L760 210" class="edge"/>
+  <text x="730" y="186" class="lbl">C</text>
+
+  <rect x="500" y="210" width="120" height="36" rx="6" class="node"/>
+  <text x="510" y="225" class="t">A-F · SB 행동</text>
+  <text x="510" y="239" class="s">{F, C}</text>
+
+  <rect x="700" y="210" width="120" height="36" rx="6" class="node"/>
+  <text x="710" y="225" class="t">A-C · SB 행동</text>
+  <text x="710" y="239" class="s">{F, C} — 콜하면 콜러 2명</text>
+
+  <!-- A-C: SB F -> BB (A-C-F) ; SB C -> BB truncated (A-C-C) -->
+  <path d="M740 246 L680 290" class="edge"/>
+  <text x="700" y="266" class="lbl">F</text>
+  <path d="M780 246 L840 290" class="edge"/>
+  <text x="820" y="266" class="lbl">C</text>
+
+  <rect x="620" y="290" width="120" height="36" rx="6" class="node"/>
+  <text x="630" y="305" class="t">A-C-F · BB 행동</text>
+  <text x="630" y="319" class="s">{F, C}</text>
+
+  <rect x="780" y="290" width="160" height="50" rx="6" class="cut"/>
+  <text x="790" y="305" class="t">A-C-C · BB — 노드 없음</text>
+  <text x="790" y="319" class="s">강제 폴드 (확률 1). 파일에 없다.</text>
+  <text x="790" y="333" class="s">truncation.ts 가 여기의 콜 이득을 잰다</text>
+
+  <!-- BB at A-C-F : F -> 2-way terminal (CO vs BTN) ; C -> 3-way -->
+  <path d="M660 326 L600 370" class="edge"/>
+  <text x="620" y="346" class="lbl">F</text>
+  <path d="M700 326 L720 370" class="edge"/>
+  <text x="716" y="346" class="lbl">C</text>
+
+  <rect x="520" y="370" width="150" height="40" rx="6" class="term"/>
+  <text x="530" y="386" class="t">2-way 쇼다운 CO vs BTN</text>
+  <text x="530" y="400" class="s">Pot = A + 0.5 + 1 + 2S · eq2 (전수 표)</text>
+
+  <rect x="690" y="370" width="170" height="40" rx="6" class="term3"/>
+  <text x="700" y="386" class="t">3-way 쇼다운 CO/BTN/BB</text>
+  <text x="700" y="400" class="s">Pot = A + 0.5 + 3S · eq3 (MC 표), p3 카드 제거</text>
+
+  <!-- A-F: SB F -> BB ; -->
+  <path d="M560 246 L470 290" class="edge"/>
+  <text x="505" y="266" class="lbl">F / C → 잼-폴드·2-way·3-way …</text>
+
+  <rect x="380" y="290" width="150" height="36" rx="6" class="term"/>
+  <text x="390" y="305" class="t">A-F-F-F · 잼 + 전원 폴드</text>
+  <text x="390" y="319" class="s">CO 가 A + 1.5 를 걷는다 (share 1)</text>
+
+  <!-- left subtree note -->
+  <path d="M280 166 L200 210" class="edge"/>
+  <text x="225" y="186" class="lbl">F</text>
+  <rect x="120" y="210" width="150" height="36" rx="6" class="node"/>
+  <text x="130" y="225" class="t">F-F · SB 행동 {F, A}</text>
+  <text x="130" y="239" class="s">≡ 2-max 루트 (5.3 hard 게이트)</text>
+  <path d="M170 246 L170 290" class="edge"/>
+  <text x="178" y="272" class="lbl">F</text>
+  <rect x="100" y="290" width="150" height="36" rx="6" class="term"/>
+  <text x="110" y="305" class="t">F-F-F · BB 가 걷는다</text>
+  <text x="110" y="319" class="s">BB 결정 없음, u_BB = A + 0.5 − ante_BB</text>
+
+  <!-- legend / rules -->
+  <rect x="20" y="440" width="920" height="100" rx="8" class="node"/>
+  <text x="32" y="460" class="t" font-weight="700">규칙 (1.1 · 1.4)</text>
+  <text x="32" y="480" class="s">· 잼이 없으면 {F, A}, 잼을 마주하면 {F, C}. 스택이 같으므로 잼 뒤 A 는 상태 기계가 거부한다 (D10). 콜 2명 뒤의 플레이어는 결정 노드가 없다 — 그 라인은 임포터 경고(트리 미폐쇄)로만 나타나고 거부되지 않는다.</text>
+  <text x="32" y="498" class="s">· 히어로 h 의 시점: 활성 상대 핸드는 p2(y|h)·p3(y,c|h) (h 와 겹치지 않는 결합분포) × 전략. 폴더 f 는 1 − P_f(비폴드 | h) 또는 1 − P_f(비폴드 | h, y) (앞선 활성 핸드 하나까지 조건).</text>
+  <text x="32" y="516" class="s">· none/bba1 에서는 앞선 폴드가 팟을 바꾸지 않으므로 "k 폴드 뒤" 서브게임이 (n−k)-max 루트와 동형이다. pp 는 폴더의 앤티가 남아 동형이 아니다.</text>
+  <text x="32" y="534" class="s">· 9-max 트리: 결정 128 · 2-way 36 · 3-way 84 · 잼-전원폴드 8 · 절단 결정 126 · 제거된 4-way+ 터미널 382 (직접 열거, tree.test.ts 가 고정).</text>
+</svg>
