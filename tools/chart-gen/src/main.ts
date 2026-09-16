@@ -412,6 +412,14 @@ const cfg: WorkerConfig = {
   maxIterations: values.iterations === undefined ? undefined : Number(values.iterations),
 };
 
+// 가장 흔한 실수: 3-way 표를 만들기 전에 `gen:charts` 를 돌리는 것. ENOENT 스택 대신
+// 무엇을 해야 하는지 알려준다 (표는 커밋돼 있으므로 보통은 클론 직후에도 있다).
+if (needThree && equity3Path !== null && !existsSync(equity3Path)) {
+  console.error(`3-way equity table not found: ${equity3Path}`);
+  console.error('run `npm run gen:equity3` first (hours), or restrict the run to `--sizes 2`.');
+  process.exit(2);
+}
+
 if (values.worker === true) {
   runWorker(cfg);
 } else {

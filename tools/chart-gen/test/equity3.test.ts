@@ -181,6 +181,31 @@ describe('3.4 알려진 정답값', () => {
     }
   });
 
+  /**
+   * **회귀**: 거절 샘플링이 성공할 수 없는 트리플(w3 = 0)에서 표 생성기가 영원히 돌았다.
+   * 818,805 개 중 325 개가 그렇다 (AA/AA/AA 는 에이스 4장으로 콤보 3개를 못 만든다).
+   * 이 지분은 축약에서 w3 = 0 으로 곱해져 쓰이지 않으므로 대칭값을 즉시 돌려준다.
+   */
+  it('3.2 w3 = 0 인 트리플은 즉시 대칭값을 돌려준다 (무한 루프 회귀)', () => {
+    const aa = idx('AA');
+    expect(countW3(aa, aa, aa)).toBe(0);
+    const t0 = Date.now();
+    const r = sampleTriple(aa, aa, aa, 100_000);
+    expect(Date.now() - t0).toBeLessThan(1000);
+    expect(r.w3).toBe(0);
+    expect(r.shares).toEqual([1 / 3, 1 / 3, 1 / 3]);
+    expect(quantizeShares(aa, aa, aa, r.shares)).toEqual([21_845, 21_845, 21_845]);
+
+    // 전수: w3 = 0 인 트리플이 정확히 325 개다 (그 전부가 이 경로를 탄다).
+    let zero = 0;
+    for (let k = 0; k < CLASS_COUNT; k++) {
+      for (let j = 0; j <= k; j++) {
+        for (let i = 0; i <= j; i++) if (countW3(i, j, k) === 0) zero++;
+      }
+    }
+    expect(zero).toBe(325);
+  });
+
   it('3.2 같은 클래스가 겹치면 지분이 대칭화된다 (72o x3 은 정확히 21845)', () => {
     const t = idx('72o');
     expect(quantizeShares(t, t, t, [0.33, 0.34, 0.33])).toEqual([21_845, 21_845, 21_845]);

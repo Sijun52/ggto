@@ -165,6 +165,13 @@ export function sampleTriple(i: number, j: number, k: number, samples: number): 
   if (!Number.isInteger(samples) || samples < 1) {
     throw new RangeError(`samples must be a positive integer: ${String(samples)}`);
   }
+  // **서로 겹치지 않는 콤보 3쌍이 아예 없는 트리플**이 818,805 개 중 325 개 있다
+  // (AA/AA/AA 는 에이스가 4장뿐이라 불가능, AA/AA/AKs 도 마찬가지). 거절 샘플링은 이때
+  // 영원히 돈다 — 실제로 표 생성이 t=0 에서 멈춰 있었다. 이 트리플의 지분은 모든 축약에서
+  // w3 = 0 으로 곱해져 **한 번도 쓰이지 않으므로** 대칭값(1/3)을 즉시 돌려준다.
+  // (양자화하면 21845 셋이라 로더의 합·대칭 검사도 통과한다.)
+  const w3 = countW3(i, j, k);
+  if (w3 === 0) return { shares: [1 / 3, 1 / 3, 1 / 3], w3: 0, samples };
   // 난수는 함수 호출 없이 배열에서 읽는다 — 클로저 호출 하나가 샘플당 9~11번이고
   // 프로파일에서 전체의 40% 였다. `pos === POOL_SIZE` 일 때만 refill 을 부른다.
   const state = seedState(tripleSeed(i, j, k));
@@ -293,7 +300,7 @@ export function sampleTriple(i: number, j: number, k: number, samples: number): 
     if (vc === best) sc += gain;
   }
 
-  return { shares: [sa / samples, sb / samples, sc / samples], w3: countW3(i, j, k), samples };
+  return { shares: [sa / samples, sb / samples, sc / samples], w3, samples };
 }
 
 /** 보드 마스크에 홀 카드 2장을 더해 평가한다. */
