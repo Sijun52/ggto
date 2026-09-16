@@ -1,0 +1,132 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="860" height="560" viewBox="0 0 860 560" font-family="ui-sans-serif, system-ui, sans-serif">
+  <style>
+    .bg { fill: #020617; }
+    .frame { fill: #020617; stroke: #334155; stroke-width: 2; }
+    .surface { fill: #0f172a; stroke: #334155; }
+    .txt { fill: #e2e8f0; font-size: 11px; }
+    .dim { fill: #94a3b8; font-size: 10px; }
+    .mono { font-family: ui-monospace, Menlo, monospace; }
+    .cap { fill: #94a3b8; font-size: 12px; }
+    .btn { fill: #1e293b; stroke: #334155; }
+    .btnX { fill: #38bdf8; }
+    .btnB { fill: #f59e0b; }
+    .btnA { fill: #dc2626; }
+    .dark { fill: #020617; font-size: 11px; font-weight: 700; }
+    .cell { fill: #1e293b; stroke: #0b1220; stroke-width: 0.5; }
+    .cellHero { fill: #f1f5f9; }
+    .layerX { fill: #38bdf8; }
+    .layerB { fill: #f59e0b; }
+    .chip { fill: #1e293b; stroke: #475569; }
+    .verdict { fill: #fbbf24; }
+  </style>
+  <rect class="bg" width="860" height="560"/>
+
+  <!-- Frame 1: 출제 (masked) -->
+  <rect class="frame" x="30" y="20" width="218" height="470" rx="10"/>
+  <text class="txt" x="42" y="40">Trainer · 포스트플랍 7/20</text>
+  <!-- board + pot -->
+  <g transform="translate(42,50)">
+    <rect class="surface" width="14" height="19" rx="2"/><text class="txt mono" x="2" y="13" fill="#f1f5f9">K♠</text>
+    <rect class="surface" x="17" width="14" height="19" rx="2"/><text class="txt mono" x="19" y="13" fill="#f87171">7♥</text>
+    <rect class="surface" x="34" width="14" height="19" rx="2"/><text class="txt mono" x="36" y="13" fill="#f87171">2♥</text>
+    <rect class="surface" x="51" width="14" height="19" rx="2"/><text class="txt mono" x="53" y="13" fill="#34d399">Q♣</text>
+    <text class="dim mono" x="72" y="13">turn · pot 35 · eff 65 · OOP</text>
+  </g>
+  <!-- line bar (read-only) -->
+  <g transform="translate(42,76)">
+    <rect class="chip" width="34" height="18" rx="4"/><text class="txt mono" x="6" y="12">Turn</text>
+    <text class="dim" x="38" y="12">›</text>
+    <rect class="chip" x="46" width="30" height="18" rx="4"/><text class="txt mono" x="52" y="12">B15</text>
+    <text class="dim" x="80" y="12">›</text>
+    <rect class="chip" x="88" width="22" height="18" rx="4"/><text class="txt mono" x="94" y="12">C</text>
+    <text class="dim" x="118" y="12">읽기 전용</text>
+  </g>
+  <!-- hero cards -->
+  <g transform="translate(42,102)">
+    <rect class="surface" width="22" height="30" rx="3"/><text class="txt mono" x="4" y="19" fill="#f1f5f9">A♠</text>
+    <rect class="surface" x="26" width="22" height="30" rx="3"/><text class="txt mono" x="30" y="19" fill="#f1f5f9">K♠</text>
+    <text class="dim" x="56" y="19">히어로 (표기 공간)</text>
+  </g>
+  <!-- masked grid 13x13 -->
+  <g transform="translate(42,140)">
+    <g id="grid1">
+      <rect class="cell" x="0" y="0" width="195" height="195"/>
+      <!-- draw a 13x13 lattice -->
+      <path stroke="#0b1220" stroke-width="0.6" d="M15 0V195M30 0V195M45 0V195M60 0V195M75 0V195M90 0V195M105 0V195M120 0V195M135 0V195M150 0V195M165 0V195M180 0V195M0 15H195M0 30H195M0 45H195M0 60H195M0 75H195M0 90H195M0 105H195M0 120H195M0 135H195M0 150H195M0 165H195M0 180H195"/>
+      <!-- hero class AKs highlighted (row A, col K) -->
+      <rect class="cellHero" x="15" y="0" width="15" height="15"/>
+      <text class="dark" x="16" y="11" font-size="8">AKs</text>
+    </g>
+    <text class="dim" x="0" y="210">선택: AKs · 전략 레이어 없음 (마스크)</text>
+  </g>
+  <!-- bottom action bar = P5 ActionButtons(mode: answer) -->
+  <g transform="translate(30,430)">
+    <rect x="0" y="0" width="218" height="60" fill="#020617" stroke="#334155"/>
+    <rect class="btn" x="10" y="12" width="26" height="36" rx="4"/><text class="txt" x="19" y="34">←</text>
+    <rect class="btnX" x="44" y="8" width="52" height="44" rx="4"/><text class="dark" x="63" y="34">X</text>
+    <rect class="btnB" x="102" y="8" width="60" height="44" rx="4"/><text class="dark" x="110" y="34">B37.5</text>
+    <rect class="btnA" x="168" y="8" width="40" height="44" rx="4"/><text class="dark" x="182" y="34">A</text>
+  </g>
+  <text class="cap" x="30" y="508">① 출제 — 라인은 보이고 전략은 숨김. 하단 바 = 답</text>
+
+  <!-- Frame 2: 답 (revealed) -->
+  <rect class="frame" x="300" y="20" width="218" height="470" rx="10"/>
+  <text class="txt" x="312" y="40">Trainer · 포스트플랍 7/20</text>
+  <g transform="translate(312,50)">
+    <rect class="surface" width="14" height="19" rx="2"/><text class="txt mono" x="2" y="13" fill="#f1f5f9">K♠</text>
+    <rect class="surface" x="17" width="14" height="19" rx="2"/><text class="txt mono" x="19" y="13" fill="#f87171">7♥</text>
+    <rect class="surface" x="34" width="14" height="19" rx="2"/><text class="txt mono" x="36" y="13" fill="#f87171">2♥</text>
+    <rect class="surface" x="51" width="14" height="19" rx="2"/><text class="txt mono" x="53" y="13" fill="#34d399">Q♣</text>
+    <text class="dim mono" x="72" y="13">turn · pot 35 · eff 65 · OOP</text>
+  </g>
+  <!-- grade box -->
+  <g transform="translate(312,76)">
+    <rect class="surface" width="194" height="46" rx="6"/>
+    <text class="verdict" x="8" y="17" font-size="12" font-weight="700">Minor · EV loss 0.18bb</text>
+    <text class="dim mono" x="8" y="33">당신 X (47%) · 최선 B37.5 +2.31bb</text>
+    <text class="dim mono" x="8" y="43" font-size="9">한 솔브 안의 비교 (D29) · expl 0.05%</text>
+  </g>
+  <!-- revealed grid with layers -->
+  <g transform="translate(312,130)">
+    <rect class="cell" x="0" y="0" width="195" height="195"/>
+    <path stroke="#0b1220" stroke-width="0.6" d="M15 0V195M30 0V195M45 0V195M60 0V195M75 0V195M90 0V195M105 0V195M120 0V195M135 0V195M150 0V195M165 0V195M180 0V195M0 15H195M0 30H195M0 45H195M0 60H195M0 75H195M0 90H195M0 105H195M0 120H195M0 135H195M0 150H195M0 165H195M0 180H195"/>
+    <!-- a few stacked cells -->
+    <rect class="layerB" x="0" y="0" width="15" height="15"/><rect class="layerX" x="0" y="0" width="15" height="7"/>
+    <rect class="layerB" x="15" y="0" width="15" height="15"/><rect class="layerX" x="15" y="0" width="15" height="8"/>
+    <rect class="layerB" x="15" y="15" width="15" height="15"/><rect class="layerX" x="15" y="15" width="15" height="2"/>
+    <rect class="layerX" x="30" y="30" width="15" height="15"/><rect class="layerB" x="30" y="42" width="15" height="3"/>
+    <rect class="layerX" x="45" y="45" width="15" height="15"/>
+    <rect class="layerB" x="60" y="60" width="15" height="15"/><rect class="layerX" x="60" y="60" width="15" height="4"/>
+    <rect fill="none" stroke="#f1f5f9" stroke-width="1.5" x="15" y="0" width="15" height="15"/>
+    <text class="dim" x="0" y="210">선택: AKs · X 47% +2.13bb · B37.5 53% +2.31bb</text>
+  </g>
+  <!-- aggregate mini -->
+  <g transform="translate(312,350)">
+    <rect class="surface" width="194" height="40" rx="6"/>
+    <text class="dim mono" x="8" y="14">X 46.5% · B37.5 52.8% · A 0.6%</text>
+    <text class="dim mono" x="8" y="30">노드 EV OOP +23.90 · IP +26.10 = 팟 50.00</text>
+  </g>
+  <g transform="translate(312,398)">
+    <rect class="btn" width="194" height="22" rx="4"/><text class="txt" x="8" y="15" fill="#38bdf8">탐색기에서 열기 → /solve?hash=…&amp;line=B15-C</text>
+  </g>
+  <g transform="translate(300,430)">
+    <rect x="0" y="0" width="218" height="60" fill="#020617" stroke="#334155"/>
+    <rect x="10" y="8" width="198" height="44" rx="4" fill="#34d399"/><text class="dark" x="90" y="34">다음 →</text>
+  </g>
+  <text class="cap" x="300" y="508">② 답 — 같은 화면의 마스크 해제 (P5 격자·어그리게이트 재사용)</text>
+
+  <!-- Right: notes -->
+  <g transform="translate(560,30)">
+    <text class="txt" x="0" y="12" font-weight="700">P6 규칙 (요약)</text>
+    <text class="dim" x="0" y="34">· 스팟 키 ps:&lt;hash&gt;:&lt;line&gt;:&lt;combo&gt; (정규 공간)</text>
+    <text class="dim" x="0" y="52">· 채점은 한 솔브 안에서만 — 시도 행에 hash·expl·iter·stamp</text>
+    <text class="dim" x="0" y="70">· 채점 가능 = 비압축(D28) ∧ expl ≤ 0.1%(플랍) / 0.05%(턴·리버)</text>
+    <text class="dim" x="0" y="88">· 샘플링 = 전략을 따라 걷는 랜덤 워크 (노드 열거 없음)</text>
+    <text class="dim" x="0" y="106">· 카테고리 9 = 스트리트 × {bet, vs_bet, vs_raise} + 태그</text>
+    <text class="dim" x="0" y="124">· 성향 리크: 과폴드·과콜·과베팅·언더폴드 (bb/스팟)</text>
+    <text class="dim" x="0" y="142">· 프리플랍 리포트와 합산하지 않는다</text>
+    <text class="dim" x="0" y="178">값은 예시. 데스크톱 배치는 P5 탐색기 3열과 같다</text>
+    <text class="dim" x="0" y="196">(좌 트리 없음 · 중앙 격자 · 우 채점+어그리게이트+답 버튼).</text>
+  </g>
+  <text class="cap" x="30" y="546" fill="#cbd5e1">GGTO · docs/assets/p6-trainer-postflop-mobile.svg · P6 스펙 0절·5절</text>
+</svg>
