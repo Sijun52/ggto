@@ -129,11 +129,19 @@ describe('5.1 (a) 모든 터미널에서 지불의 합이 0 이다', () => {
   });
 });
 
+/**
+ * 5.1 이 재는 것은 **축약의 구조적 성질**(질량 결함 · 게임값 합)이지 수렴 품질이 아니다.
+ * 그래서 300 반복이면 충분하다. 다만 `solveNmax` 는 기본적으로 ε·혼합손실 게이트를
+ * 못 넘으면 throw 하는데, 300 반복에서 혼합손실은 당연히 크다 (n=3 4.7e-2, n=4 2.5e-1).
+ * 그 게이트는 5.2 가 따로 잰다 — 여기서는 꺼서 5.1 이 실제로 질량 결함을 재게 한다.
+ */
+const MASS_ONLY = { maxIterations: 300, allowGateFailure: true } as const;
+
 describe.skipIf(!hasEquity3)('5.1 (b)(c) 질량 결함과 게임값 (3-way 표 필요)', () => {
   it('5.1 (b) n=3 은 massDefect < 1e-12, |sumGameValueBb| < 1e-9 (근사 없음)', () => {
     const tree = buildTree(3, CAP_CALLERS);
     const spec = gameSpec(3, 'bba1', 10);
-    const res = solveNmax(tree, spec, tablesFull(), terminalPayoffs(tree, spec), { maxIterations: 300 });
+    const res = solveNmax(tree, spec, tablesFull(), terminalPayoffs(tree, spec), MASS_ONLY);
     expect(res.massDefect).toBeLessThan(1e-12);
     expect(Math.abs(res.sumGameValueBb)).toBeLessThan(1e-9);
   });
@@ -141,7 +149,7 @@ describe.skipIf(!hasEquity3)('5.1 (b)(c) 질량 결함과 게임값 (3-way 표 �
   it('5.1 (c) n=4 의 massDefect 는 2e-3 아래다 (값을 출력한다)', () => {
     const tree = buildTree(4, CAP_CALLERS);
     const spec = gameSpec(4, 'bba1', 10);
-    const res = solveNmax(tree, spec, tablesFull(), terminalPayoffs(tree, spec), { maxIterations: 300 });
+    const res = solveNmax(tree, spec, tablesFull(), terminalPayoffs(tree, spec), MASS_ONLY);
     console.log(`5.1 (c) n=4 bba1 10bb: massDefect=${res.massDefect.toExponential(3)} sumGameValueBb=${res.sumGameValueBb.toExponential(3)}`);
     expect(res.massDefect).toBeLessThan(2e-3);
   });
